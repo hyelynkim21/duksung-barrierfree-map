@@ -24,6 +24,8 @@
       /* 섹션 바탕 */
       --focus: #1f6feb;
       /* 키보드 포커스 */
+      --select: #991e66;
+      /* 선택 표시 (JS에서 CONFIG.highlight 값으로 덮어씀) */
     }
 
     * {
@@ -353,6 +355,20 @@
       line-height: 1.55;
     }
 
+    /* 입구 마커로 연 입구: 선택한 건물 빛과 같은 버건디 테두리로 강조 */
+    .item.focus {
+      background: var(--paper);
+      outline: 2px solid var(--select);
+    }
+
+    .item .tag {
+      display: inline-block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--select);
+    }
+
     .item .floor {
       font-weight: 700;
       margin-right: 6px;
@@ -594,6 +610,8 @@
     // =================================================================================
 
     const $ = id => document.getElementById(id);
+    // 선택 색은 CONFIG.highlight 한 곳에서 관리: CSS 변수 --select에도 같은 색을 넣어 줌
+    document.documentElement.style.setProperty('--select', CONFIG.highlight);
     const isMobile = () => window.innerWidth <= 700;
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -668,7 +686,7 @@
     }
 
     // ---------- 상세 패널 ----------
-    function openPanel(b, facs, news, bldPhotos, photosByFac) {
+    function openPanel(b, facs, news, bldPhotos, photosByFac, focusId) {
       const level = LEVELS[b.access_level] ? b.access_level : '정보 없음';
       const checked = parseDate(b.last_checked);
       const recent = checked && (Date.now() - checked) / 86400000 <= CONFIG.recentDays;
@@ -711,10 +729,12 @@
 
       types.forEach(t => {
         const rows = groups[t].sort((a, b) => floorRank(a.floor) - floorRank(b.floor));
+        // 입구 마커로 열었으면 누른 입구를 맨 앞으로 (나머지 입구는 원래 순서대로 아래에)
+        if (t === '입구' && focusId) rows.sort((a, b) => (b.facility_id === focusId) - (a.facility_id === focusId));
 
         if (t === '입구') {
-          // 입구: 접힌 상자 (변경 소식·입구·시설이 목차처럼 한눈에 보이게)
-          html += `<details class="section"><summary>입구 (${rows.length})</summary>`;
+          // 입구: 접힌 상자 (변경 소식·입구·시설이 목차처럼 한눈에 보이게). 입구 마커로 열었을 때만 펼침
+          html += `<details class="section"${focusId ? ' open' : ''}><summary>입구 (${rows.length})</summary>`;
         } else {
           // 시설 종류 중 첫 번째일 때만 '시설' 상자를 연다
           if (t === facTypes[0]) html += `<details class="section"><summary>시설 (${facCount})</summary>`;
@@ -723,7 +743,9 @@
         }
         rows.forEach(f => {
           const fc = parseDate(f.last_checked);
-          html += `<div class="item">
+          const focus = f.facility_id === focusId;   // 입구 마커로 누른 그 입구인지
+          html += `<div class="item${focus ? ' focus' : ''}">
+            ${focus ? '<span class="tag">선택한 입구</span>' : ''}
             ${photoHtml(photosByFac[f.facility_id])}
             ${f.floor ? `<span class="floor">${esc(f.floor)}</span>` : ''}${esc(f.location_desc || (f.floor ? '' : '위치 정보 없음'))}
             ${f.equipment ? `<span class="equip">${esc(f.equipment)}</span>` : ''}
@@ -959,15 +981,69 @@
       if (missing.size) showStatus('시트와 연결 안 된 building_id: ' + [...missing].join(', '), true);
       else showStatus('시트 연결 완료: 건물 ' + buildings.length + '곳, 시설 ' + facilities.length + '건, 소식 ' + news.length + '건, 사진 ' + photos.length + '장');
 
-      // 4) 건물 클릭 → 상세 패널
-      map.on('click', 'buildings-3d', e => {
-        const id = e.features[0].properties.building_id;
-        const b = byId[id] || { building_id: id, name: e.features[0].properties.name, access_level: '정보 없음' };
+      // 입구 마커: 시트 facilities에서 type이 '입구'이고 좌표가 있는 것만 점으로 만듦
+      const entrances = {
+        type: 'FeatureCollection',
+        features: facilities
+          .filter(f => f.type === '입구' && f.lng && f.lat)
+          .map(f => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [Number(f.lng), Number(f.lat)] },
+            properties: { building_id: f.building_id, facility_id: f.facility_id }
+          }))
+      };
+      map.addSource('entrances', { type: 'geojson', data: entrances });
+      map.addLayer({
+        id: 'entrance-dots', source: 'entrances', type: 'circle',
+        paint: {
+          'circle-radius': isMobile() ? 7 : 6,      // 휴대폰은 손가락으로 누르기 쉽게 조금 크게
+          'circle-color': '#ffffff',
+          'circle-stroke-color': '#1d2622',          // --ink 색 테두리
+          'circle-stroke-width': 2.5
+        }
+      });
+      // 누르기 영역: 보이는 동그라미 둘레에 안 보이는 큰 동그라미(지름 44px, 손가락 권장 크기)를 깔아
+      // 근처만 눌러도 입구가 선택되게 함
+      map.addLayer({
+        id: 'entrance-hit', source: 'entrances', type: 'circle',
+        paint: { 'circle-radius': 22, 'circle-color': '#000000', 'circle-opacity': 0 }
+      });
+
+      // 건물 하나를 패널에 열고 지도에서 선택 표시 (건물 클릭·입구 마커 클릭에서 함께 씀)
+      // focusId: 입구 마커로 열었을 때 그 입구의 facility_id (건물을 직접 누르면 null)
+      function showBuilding(id, focusId, fallbackName) {
+        const b = byId[id] || { building_id: id, name: fallbackName, access_level: '정보 없음' };
         try {
-          openPanel(b, facsById[id] || [], newsById[id] || [], photosByBld[id] || [], photosByFac);
+          openPanel(b, facsById[id] || [], newsById[id] || [], photosByBld[id] || [], photosByFac, focusId);
           selectBuilding(id);
         } catch (err) { showStatus('건물 선택 오류: ' + err.message, true); }
+      }
+
+      // 4) 건물 클릭 → 상세 패널 (같은 자리에 입구 마커가 있으면 마커 쪽에 맡김)
+      map.on('click', 'buildings-3d', e => {
+        if (map.queryRenderedFeatures(e.point, { layers: ['entrance-hit'] }).length) return;
+        showBuilding(e.features[0].properties.building_id, null, e.features[0].properties.name);
       });
+      // 입구 마커 클릭 → 그 건물 패널을 입구 상자가 펼쳐진 채로, 누른 입구를 맨 위에 강조
+      map.on('click', 'entrance-hit', e => {
+        const p = e.features[0].properties;
+        showBuilding(p.building_id, p.facility_id);
+      });
+      map.on('mouseenter', 'entrance-hit', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'entrance-hit', () => { map.getCanvas().style.cursor = ''; });
+
+      // [개발용] 좌표 따기: 지도를 누르면 그 자리의 경도·위도를 상태 쪽지에 띄우고 복사
+      // 경도와 위도 사이를 탭으로 복사해서, 시트의 lng 칸에 붙여 넣으면 옆 lat 칸까지 한 번에 채워짐
+      // keepStatus가 false가 되면(기능 고정) 자동으로 꺼짐
+      map.on('click', e => {
+        if (!CONFIG.keepStatus) return;
+        const lng = e.lngLat.lng.toFixed(6), lat = e.lngLat.lat.toFixed(6);
+        const copied = navigator.clipboard
+          ? navigator.clipboard.writeText(lng + '\t' + lat).then(() => true, () => false)
+          : Promise.resolve(false);
+        copied.then(ok => showStatus('좌표 lng ' + lng + ', lat ' + lat + (ok ? ' (복사됨)' : '')));
+      });
+
       map.on('mouseenter', 'buildings-3d', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'buildings-3d', () => { map.getCanvas().style.cursor = ''; });
     });
