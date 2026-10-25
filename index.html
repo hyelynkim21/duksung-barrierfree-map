@@ -573,6 +573,9 @@
       recentDays: 90,   // 최종 확인일이 이 기간 안이면 '최근 확인' 배지 (한 학기+방학 기준)
       keepStatus: true, // 개발 중: 상태 메시지 계속 표시 (서비스 오픈 때 false로)
       highlight: '#991e66', // 선택한 건물의 빛 색 (덕성여대 색상)
+      // 지형(땅 높낮이) 표시. 작은 화면에서 지형 조각과 건물이 겹쳐 건물 일부가 깜빡이는 문제가 있어 꺼 둠
+      // (true로 바꾸면 다시 켜짐. 향후 고해상도 지형 자료를 쓸 때를 위해 코드는 남겨 둠)
+      terrain: false,
       // 땅 높낮이를 몇 배로 과장할지 (1 = 실제 높이). 1보다 크게 쓰면 보고서에 배율을 밝힐 것
       terrainExaggeration: 1
     };
@@ -773,21 +776,23 @@
       // 0) 지형: 땅 높이 데이터(DEM)를 불러와 바닥을 솟아오르게 함
       //    AWS 공개 데이터 Terrain Tiles (terrarium 형식). 한국은 대략 30m 간격이라 언덕 모양만 보이고,
       //    건물 앞 경사로 같은 작은 높이 차는 표현되지 않음
-      const DEM_TILES = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'];
-      const DEM_CREDIT = '지형: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles (AWS Open Data)</a>';
-      map.addSource('terrain', {
-        type: 'raster-dem', tiles: DEM_TILES, encoding: 'terrarium',
-        tileSize: 256, maxzoom: 15, attribution: DEM_CREDIT
-      });
-      map.setTerrain({ source: 'terrain', exaggeration: CONFIG.terrainExaggeration });
-      // 언덕에 옅은 그림자를 넣어 높낮이가 눈에 보이게 (같은 데이터를 그림자용으로 한 번 더 불러옴)
-      map.addSource('hillshade-src', {
-        type: 'raster-dem', tiles: DEM_TILES, encoding: 'terrarium', tileSize: 256, maxzoom: 15
-      });
-      map.addLayer({
-        id: 'hillshade', source: 'hillshade-src', type: 'hillshade',
-        paint: { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': '#5b6660' }
-      });
+      if (CONFIG.terrain) {
+        const DEM_TILES = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'];
+        const DEM_CREDIT = '지형: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles (AWS Open Data)</a>';
+        map.addSource('terrain', {
+          type: 'raster-dem', tiles: DEM_TILES, encoding: 'terrarium',
+          tileSize: 256, maxzoom: 15, attribution: DEM_CREDIT
+        });
+        map.setTerrain({ source: 'terrain', exaggeration: CONFIG.terrainExaggeration });
+        // 언덕에 옅은 그림자를 넣어 높낮이가 눈에 보이게 (같은 데이터를 그림자용으로 한 번 더 불러옴)
+        map.addSource('hillshade-src', {
+          type: 'raster-dem', tiles: DEM_TILES, encoding: 'terrarium', tileSize: 256, maxzoom: 15
+        });
+        map.addLayer({
+          id: 'hillshade', source: 'hillshade-src', type: 'hillshade',
+          paint: { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': '#5b6660' }
+        });
+      }
 
       // 1) 건물을 먼저 회색으로 그리기
       let geo;
