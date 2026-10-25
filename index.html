@@ -320,24 +320,31 @@
       margin: 0 0 8px;
       font-size: 16px;
     }
+
+    /* 묶음 상자 뚜껑: 누를 수 있는 칸처럼 보이게 */
     .section summary {
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
-      padding: 6px 0;
+      padding: 12px 14px;
       margin-bottom: 8px;
+      background: var(--wash);
+      border-radius: 8px;
     }
 
+    /* 시설 상자 안의 작은 제목 */
     .section .sub {
       margin: 14px 0 6px;
       font-size: 14px;
       color: var(--muted);
     }
+
     summary:focus-visible {
       outline: 3px solid var(--focus);
       outline-offset: 2px;
       border-radius: 4px;
     }
+
     .item {
       background: var(--wash);
       border-radius: 8px;
@@ -425,6 +432,12 @@
       .photo img {
         height: 240px;
       }
+
+      /* 맨 위 건물 사진만 작게 (시설 카드 사진은 그대로) */
+      #panel-body > .photo img,
+      #panel-body > .gallery .photo img {
+        height: 160px;
+      }
     }
 
     .photo figcaption {
@@ -479,6 +492,40 @@
       font-weight: 700;
     }
 
+    /* 건물 이름표: 반투명 둥근 네모 + 아래로 짧은 선 (클릭은 건물로 통과) */
+    .bld-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .bld-label span {
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(29, 38, 34, 0.55);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);       /* 뒤 지도를 살짝 흐리게 비춰 유리처럼 */
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .bld-label::after {
+      content: '';
+      width: 1.5px;
+      height: 10px;
+      background: rgba(29, 38, 34, 0.55);
+    }
+
+    @media (max-width: 700px) {
+      .bld-label span {
+        font-size: 11px;
+        padding: 2px 6px;
+      }
+    }
+
     /* 변경 소식 */
     .news .date {
       font-size: 12px;
@@ -525,7 +572,9 @@
       photoDir: 'photos/', // 사진 파일을 넣는 폴더 (시트 file 열에는 파일 이름만)
       recentDays: 90,   // 최종 확인일이 이 기간 안이면 '최근 확인' 배지 (한 학기+방학 기준)
       keepStatus: true, // 개발 중: 상태 메시지 계속 표시 (서비스 오픈 때 false로)
-      highlight: '#991e66'  // 선택한 건물의 빛 색 (덕성여대 색상)
+      highlight: '#991e66', // 선택한 건물의 빛 색 (덕성여대 색상)
+      // 땅 높낮이를 몇 배로 과장할지 (1 = 실제 높이). 1보다 크게 쓰면 보고서에 배율을 밝힐 것
+      terrainExaggeration: 1
     };
 
     // 접근성 수준별 색상과 설명 (시트 lists 탭의 값과 글자가 정확히 같아야 함)
@@ -661,8 +710,8 @@
         const rows = groups[t].sort((a, b) => floorRank(a.floor) - floorRank(b.floor));
 
         if (t === '입구') {
-          // 입구: 처음부터 열린 상자
-          html += `<details class="section" open><summary>입구 (${rows.length})</summary>`;
+          // 입구: 접힌 상자 (변경 소식·입구·시설이 목차처럼 한눈에 보이게)
+          html += `<details class="section"><summary>입구 (${rows.length})</summary>`;
         } else {
           // 시설 종류 중 첫 번째일 때만 '시설' 상자를 연다
           if (t === facTypes[0]) html += `<details class="section"><summary>시설 (${facCount})</summary>`;
@@ -721,6 +770,25 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');   // 패널과 겹치지 않게 왼쪽 위
 
     map.on('load', async () => {
+      // 0) 지형: 땅 높이 데이터(DEM)를 불러와 바닥을 솟아오르게 함
+      //    AWS 공개 데이터 Terrain Tiles (terrarium 형식). 한국은 대략 30m 간격이라 언덕 모양만 보이고,
+      //    건물 앞 경사로 같은 작은 높이 차는 표현되지 않음
+      const DEM_TILES = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'];
+      const DEM_CREDIT = '지형: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles (AWS Open Data)</a>';
+      map.addSource('terrain', {
+        type: 'raster-dem', tiles: DEM_TILES, encoding: 'terrarium',
+        tileSize: 256, maxzoom: 15, attribution: DEM_CREDIT
+      });
+      map.setTerrain({ source: 'terrain', exaggeration: CONFIG.terrainExaggeration });
+      // 언덕에 옅은 그림자를 넣어 높낮이가 눈에 보이게 (같은 데이터를 그림자용으로 한 번 더 불러옴)
+      map.addSource('hillshade-src', {
+        type: 'raster-dem', tiles: DEM_TILES, encoding: 'terrarium', tileSize: 256, maxzoom: 15
+      });
+      map.addLayer({
+        id: 'hillshade', source: 'hillshade-src', type: 'hillshade',
+        paint: { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': '#5b6660' }
+      });
+
       // 1) 건물을 먼저 회색으로 그리기
       let geo;
       try {
@@ -774,13 +842,9 @@
         pulseId = requestAnimationFrame(tick);
       }
 
-      // 같은 building_id의 조각(예술관 3조각 등)을 모두 함께 선택
-      function selectBuilding(id) {
-        const f = ['==', ['get', 'building_id'], id];
-        ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, f));
-        startPulse();
-
-        // 건물 중심으로 부드럽게 이동 (패널에 가리지 않게 여백 확보)
+      // 건물(여러 조각이면 전부 합쳐서)의 가운데 좌표 구하기. 못 찾으면 null
+      // (선택한 건물로 이동할 때와 건물 이름표 위치에 함께 씀)
+      function centerOf(id) {
         let minX = 180, minY = 90, maxX = -180, maxY = -90;
         geo.features.filter(g => g.properties.building_id === id).forEach(g => {
           const polys = g.geometry.type === 'Polygon' ? [g.geometry.coordinates] : g.geometry.coordinates;
@@ -789,10 +853,21 @@
             minY = Math.min(minY, y); maxY = Math.max(maxY, y);
           });
         });
+        return minX > maxX ? null : [(minX + maxX) / 2, (minY + maxY) / 2];
+      }
+
+      // 같은 building_id의 조각(예술관 3조각 등)을 모두 함께 선택
+      function selectBuilding(id) {
+        const f = ['==', ['get', 'building_id'], id];
+        ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, f));
+        startPulse();
+
+        // 건물 중심으로 부드럽게 이동 (패널에 가리지 않게 여백 확보)
+        const c = centerOf(id);
+        if (!c) return;   // 좌표를 못 찾으면 이동하지 않음
         const mobile = window.innerWidth <= 700;
-        if (minX > maxX) return;   // 좌표를 못 찾으면 이동하지 않음
         map.easeTo({
-          center: [(minX + maxX) / 2, (minY + maxY) / 2],
+          center: c,
           padding: mobile ? { bottom: window.innerHeight * 0.6 } : { right: $('panel').offsetWidth + 16 },  // 패널 너비만큼 비켜서 가운데 정렬
           duration: reduceMotion ? 0 : 700
         });
@@ -845,6 +920,36 @@
         else missing.add(f.properties.building_id);
       });
       map.getSource('campus-buildings').setData(geo);
+
+      // 건물 이름표: 건물마다 HTML 이름표 하나를 지붕 위쪽에 띄움
+      // (Set으로 중복 building_id를 지워서 조각이 여러 개인 건물도 이름은 한 번만)
+      const ids = [...new Set(geo.features.map(f => f.properties.building_id))];
+      const tags = ids.map(id => {
+        const c = centerOf(id);
+        if (!c) return null;
+        // 조각이 여러 개면 가장 높은 조각의 높이(m)를 씀. 높이가 없으면 건물을 세울 때와 같은 15m
+        const h = Math.max(...geo.features
+          .filter(g => g.properties.building_id === id)
+          .map(g => Number(g.properties.height) || 15));
+        const el = document.createElement('div');
+        el.className = 'bld-label';
+        el.setAttribute('aria-hidden', 'true');   // 이름은 패널에서 읽어 주므로 화면 읽기에서는 건너뜀
+        el.innerHTML = `<span>${esc((byId[id] && byId[id].name) || id)}</span>`;
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat(c).addTo(map);
+        return { marker, h, lat: c[1] };
+      }).filter(Boolean);
+
+      // 지붕 높이(m)를 지금 화면에서의 픽셀 높이로 바꿔, 이름표를 그만큼 위로 올림
+      // (확대할수록, 지도를 눕힐수록 건물이 높아 보이니 이름표도 따라 올라감)
+      function liftTags() {
+        const tilt = Math.sin(map.getPitch() * Math.PI / 180);
+        tags.forEach(t => {
+          const metersPerPixel = 40075016.686 * Math.cos(t.lat * Math.PI / 180) / (512 * Math.pow(2, map.getZoom()));
+          t.marker.setOffset([0, -(t.h / metersPerPixel) * tilt]);
+        });
+      }
+      liftTags();
+      map.on('move', liftTags);
 
       if (missing.size) showStatus('시트와 연결 안 된 building_id: ' + [...missing].join(', '), true);
       else showStatus('시트 연결 완료: 건물 ' + buildings.length + '곳, 시설 ' + facilities.length + '건, 소식 ' + news.length + '건, 사진 ' + photos.length + '장');
