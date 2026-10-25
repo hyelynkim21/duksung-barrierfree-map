@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>덕성여대 배리어프리 캠퍼스 맵</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1d2622;
+      /* 본문 글자 */
+      --muted: #5b6660;
+      /* 보조 글자 */
+      --line: #dde3df;
+      /* 구분선 */
+      --paper: #ffffff;
+      /* 패널 바탕 */
+      --wash: #f3f6f4;
+      /* 섹션 바탕 */
+      --focus: #1f6feb;
+      /* 키보드 포커스 */
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      margin: 0;
+      font-family: Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      color: var(--ink);
+    }
+
+    #map {
+      position: fixed;
+      inset: 0;
+    }
+
+    /* 상태 메시지 */
+    #status {
+      position: fixed;
+      top: 12px;
+      left: 56px;   /* 왼쪽 위 확대·축소 버튼 오른쪽 */
+      z-index: 10;
+      background: var(--paper);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+      max-width: 60vw;
+      white-space: pre-wrap;
+    }
+
+    #status.error {
+      color: #b3261e;
+    }
+
+    #status.hidden {
+      display: none;
+    }
+
+    /* 범례 */
+    #legend {
+      position: fixed;
+      left: 12px;
+      bottom: 28px;
+      z-index: 10;
+      background: var(--paper);
+      border-radius: 8px;
+      padding: 10px 14px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+      font-size: 13px;
+    }
+
+    #legend-toggle {
+      all: unset;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    #legend.collapsed #legend-body {
+      display: none;
+    }
+
+    #legend.collapsed #legend-toggle {
+      margin-bottom: 0;
+    }
+
+    #legend.collapsed #legend-toggle span {
+      display: inline-block;
+      transform: rotate(-90deg);
+    }
+
+    #legend-toggle:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    #legend ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    #legend li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      flex: none;
+    }
+
+    #legend p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* 상세 패널 (PC: 오른쪽, 모바일: 아래) */
+    #panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: clamp(380px, 32vw, 640px);   /* 큰 화면일수록 넓게, 최대 640px */
+      z-index: 20;
+      background: var(--paper);
+      box-shadow: -2px 0 12px rgba(0, 0, 0, .18);
+      overflow-y: auto;
+      padding: 20px 22px 32px;
+      transform: translateX(100%);
+      transition: transform .2s ease;
+    }
+
+    #panel.open {
+      transform: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #panel {
+        transition: none;
+      }
+    }
+
+    @media (max-width: 700px) {
+      #panel {
+        top: auto;
+        left: 0;
+        width: 100%;
+        height: 45vh;    /* dvh를 모르는 옛 브라우저용 */
+        height: 45dvh;   /* iOS 사파리 주소창을 뺀 실제 화면 기준 */
+        border-radius: 14px 14px 0 0;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, .18);
+        transform: translateY(100%);
+        padding: 16px 18px 28px;
+      }
+
+      #panel h2 {
+        font-size: 19px;
+      }
+
+      #legend {
+        bottom: 16px;
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      #status {
+        top: 8px;
+        left: 52px;
+        font-size: 12px;
+        padding: 6px 10px;
+        max-width: 70vw;
+      }
+
+      /* 패널이 열리면 범례 숨김 */
+      body.panel-open #legend {
+        display: none;
+      }
+    }
+
+    /* PC·태블릿: 오른쪽에서 살짝 띄운 카드 */
+    @media (min-width: 701px) {
+      #panel {
+        top: 16px;
+        right: 16px;
+        bottom: 16px;
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+        transform: translateX(calc(100% + 24px));
+      }
+
+      #panel.open {
+        transform: none;
+      }
+    }
+
+    /* 접기: 건물 이름과 접근성 수준만 남기고 지도를 넓게 보기 */
+    #panel.collapsed {
+      height: auto;
+      overflow: hidden;
+    }
+
+    @media (min-width: 701px) {
+      #panel.collapsed {
+        bottom: auto;   /* PC: 위쪽에 이름만 남은 작은 카드 */
+      }
+    }
+
+    #panel.collapsed #panel-body > *:not(h2):not(.level):not(.checked) {
+      display: none;
+    }
+
+    #panel-collapse {
+      position: absolute;
+      top: 14px;
+      right: 56px;
+      border: 0;
+      background: var(--wash);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    #panel-collapse span {
+      display: inline-block;
+      transition: transform .2s ease;
+    }
+
+    #panel.collapsed #panel-collapse span {
+      transform: rotate(180deg);
+    }
+
+    #panel-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      border: 0;
+      background: var(--wash);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    button:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    #panel h2 {
+      margin: 0 88px 8px 0;
+      font-size: 22px;
+      line-height: 1.3;
+    }
+
+    .level {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .summary {
+      margin: 12px 0 6px;
+      line-height: 1.6;
+    }
+
+    .meta {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 10px;
+      background: #e3f1e8;
+      color: #1d6b3d;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 20px;
+    }
+
+    .section h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .item {
+      background: var(--wash);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      line-height: 1.55;
+    }
+
+    .item .floor {
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .item .equip {
+      display: block;
+      font-size: 14px;
+    }
+
+    .item .note {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* 사진 (건물 사진은 상단, 시설 사진은 각 카드 맨 위) */
+    .photo {
+      margin: 12px 0 4px;
+    }
+
+    .item .photo {
+      margin: 0 0 8px;
+    }
+
+    /* 세로(카드뉴스 3:4)·가로 사진이 섞여도 잘리지 않게: 같은 높이 틀 안에 사진 전체를 보여줌 */
+    .photo img {
+      display: block;
+      width: 100%;
+      height: 280px;
+      object-fit: contain;
+      border-radius: 8px;
+      background: var(--line);
+    }
+
+    /* 큰 화면: 패널이 넓어진 만큼 사진과 글자도 키움 */
+    @media (min-width: 1400px) {
+      .photo img {
+        height: clamp(280px, 20vw, 420px);
+      }
+
+      #panel {
+        padding: 28px 32px 40px;
+        font-size: 17px;
+      }
+
+      #panel h2 {
+        font-size: 26px;
+      }
+
+      .section h3 {
+        font-size: 18px;
+      }
+
+      .item .equip {
+        font-size: 15px;
+      }
+
+      .meta,
+      .item .note,
+      .photo figcaption {
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .photo img {
+        height: 240px;
+      }
+    }
+
+    .photo figcaption {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* 사진이 여러 장이면 옆으로 넘겨 보기 (다음 사진이 살짝 보이게) */
+    .gallery {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      margin: 12px 0 4px;
+      padding-bottom: 6px;
+    }
+
+    .item .gallery {
+      margin: 0 0 8px;
+    }
+
+    .gallery:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
+
+    .gallery .photo {
+      flex: 0 0 85%;
+      scroll-snap-align: start;
+      margin: 0;
+      position: relative;
+    }
+
+    .photo .step {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, .6);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .photo .changed {
+      display: block;
+      color: #8a4b00;
+      font-weight: 700;
+    }
+
+    /* 변경 소식 */
+    .news .date {
+      font-size: 12px;
+      color: var(--muted);
+      margin-right: 6px;
+    }
+
+    .news a {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--focus);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+  <div id="status"></div>
+
+  <aside id="legend" aria-label="색상 안내">
+    <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">건물 색상 <span
+        aria-hidden="true">▾</span></button>
+    <div id="legend-body">
+      <ul id="legend-list"></ul>
+      <p>건물을 누르면 상세 정보가 열려요.</p>
+    </div>
+  </aside>
+
+  <aside id="panel" aria-label="건물 상세 정보" aria-hidden="true">
+    <button id="panel-collapse" aria-label="상세 정보 접기" aria-expanded="true"><span aria-hidden="true">⌃</span></button>
+    <button id="panel-close" aria-label="상세 정보 닫기">✕</button>
+    <div id="panel-body"></div>
+  </aside>
+
+  <script>
+    // ==================== CONFIG: 시트 주소는 여기 한 곳에서만 관리 ====================
+    const CONFIG = {
+      buildingsCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=0&single=true&output=csv',
+      facilitiesCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=1531722598&single=true&output=csv',
+      newsCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=486532882&single=true&output=csv',
+      photosCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=220985058&single=true&output=csv',
+      geojson: 'data/buildings.geojson',
+      photoDir: 'photos/', // 사진 파일을 넣는 폴더 (시트 file 열에는 파일 이름만)
+      recentDays: 90,   // 최종 확인일이 이 기간 안이면 '최근 확인' 배지 (한 학기+방학 기준)
+      keepStatus: true, // 개발 중: 상태 메시지 계속 표시 (서비스 오픈 때 false로)
+      highlight: '#991e66'  // 선택한 건물의 빛 색 (덕성여대 색상)
+    };
+
+    // 접근성 수준별 색상과 설명 (시트 lists 탭의 값과 글자가 정확히 같아야 함)
+    const LEVELS = {
+      '원활': { color: '#2e9e5b', desc: '휠체어 진입 입구·엘리베이터·장애인 화장실 모두 있음' },
+      '일부 제약': { color: '#f2a33a', desc: '일부 시설이 없거나 이용 조건이 있음' },
+      '어려움': { color: '#d64545', desc: '휠체어로 진입할 수 있는 입구가 없음' },
+      '정보 없음': { color: '#b0b0b0', desc: '판정할 자료가 없음' }
+    };
+
+    // 패널에 시설을 보여 줄 순서 (목록에 없는 새 종류는 맨 뒤에 자동으로 붙음)
+    const TYPE_ORDER = ['입구', '화장실', '엘리베이터', '경사로', '자동문', '주차', '편의시설'];
+    const TYPE_TITLES = { '입구': '입구', '화장실': '장애인 화장실' };
+    // =================================================================================
+
+    const $ = id => document.getElementById(id);
+    const isMobile = () => window.innerWidth <= 700;
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function showStatus(msg, isError) {
+      const box = $('status');
+      box.textContent = msg;
+      box.className = isError ? 'error' : '';
+      (isError ? console.error : console.log)(msg);
+      if (!isError && (!CONFIG.keepStatus || isMobile())) setTimeout(() => box.classList.add('hidden'), 3000);
+    }
+
+    function loadCsv(url) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(url, {
+          download: true, header: true, skipEmptyLines: true,
+          transform: v => v.trim(),
+          complete: res => resolve(res.data),
+          error: err => reject(new Error('CSV 다운로드 실패 (' + url.slice(0, 60) + '…): ' + err))
+        });
+      });
+    }
+
+    // '2026-09-23', '2026. 9. 23' 등 어떤 형식이든 날짜로 읽기
+    function parseDate(s) {
+      const m = String(s || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+      return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+    }
+    const fmtDate = d => d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
+
+    // 층 정렬: B2 < B1 < 1F < 2F … , 빈칸은 맨 뒤
+    function floorRank(f) {
+      if (!f) return 999;
+      const b = f.match(/^B(\d+)/i); if (b) return -Number(b[1]);
+      const n = f.match(/(\d+)/); return n ? Number(n[1]) : 998;
+    }
+
+    // ---------- 범례 ----------
+    $('legend-list').innerHTML = Object.entries(LEVELS).map(([name, v]) =>
+      `<li><span class="swatch" style="background:${v.color}"></span><span><b>${name}</b></span></li>`).join('');
+
+    function setLegend(open) {
+      $('legend').classList.toggle('collapsed', !open);
+      $('legend-toggle').setAttribute('aria-expanded', String(open));
+    }
+    $('legend-toggle').addEventListener('click', () => setLegend($('legend').classList.contains('collapsed')));
+    setLegend(!isMobile());
+
+    // ---------- 사진 ----------
+    // 시트 file 열: 파일 이름만 쓰면 photoDir 폴더에서, http로 시작하면 그 주소에서 불러옴
+    const photoSrc = file => /^https?:\/\//.test(file) ? file : CONFIG.photoDir + file;
+    // 같은 facility_id에 사진이 여러 장이면 step 순서로 옆으로 넘겨 보는 갤러리가 됨
+    function photoHtml(list) {
+      const items = (list || [])
+        .filter(p => p.file)
+        .sort((a, b) => (Number(a.step) || 0) - (Number(b.step) || 0));
+      if (!items.length) return '';
+      const many = items.length > 1;
+      const figs = items.map((p, i) => {
+        const d = parseDate(p.photo_date);
+        const info = [p.caption, d ? '촬영 ' + fmtDate(d) : '', p.source ? '출처: ' + p.source : '']
+          .filter(Boolean).map(esc).join(' · ');
+        return `<figure class="photo">
+          ${many ? `<span class="step">${i + 1} / ${items.length}</span>` : ''}
+          <img src="${esc(photoSrc(p.file))}" alt="${esc(p.caption || '시설 사진')}" loading="lazy"
+            onerror="this.closest('figure').remove()">
+          <figcaption>${info}${p.change_after_photo ? `<span class="changed">촬영 이후 변경: ${esc(p.change_after_photo)}</span>` : ''}</figcaption>
+        </figure>`;
+      }).join('');
+      return many
+        ? `<div class="gallery" tabindex="0" aria-label="사진 ${items.length}장, 옆으로 넘겨 보기">${figs}</div>`
+        : figs;
+    }
+
+    // ---------- 상세 패널 ----------
+    function openPanel(b, facs, news, bldPhotos, photosByFac) {
+      const level = LEVELS[b.access_level] ? b.access_level : '정보 없음';
+      const checked = parseDate(b.last_checked);
+      const recent = checked && (Date.now() - checked) / 86400000 <= CONFIG.recentDays;
+
+      let html = `<h2>${esc(b.name || b.building_id)}</h2>
+        <div class="level"><span class="swatch" style="background:${LEVELS[level].color}"></span>${level}</div>
+        <p class="meta">${LEVELS[level].desc}</p>
+        ${photoHtml(bldPhotos)}
+        ${b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''}
+        <p class="meta checked">${checked ? `최종 현장 확인 ${fmtDate(checked)}` : '현장 확인 기록 없음'}${recent ? '<span class="badge">최근 확인</span>' : ''}</p>
+        ${b.note ? `<p class="meta">${esc(b.note)}</p>` : ''}`;
+
+      // 변경 소식: 최신순
+      const sorted = (news || []).slice().sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
+      if (sorted.length) {
+        html += `<div class="section"><h3>변경 소식 (${sorted.length})</h3>`;
+        sorted.forEach(n => {
+          const d = parseDate(n.date);
+          html += `<div class="item news">
+            ${d ? `<span class="date">${fmtDate(d)}</span>` : ''}<b>${esc(n.title)}</b>
+            ${n.summary ? `<span class="equip">${esc(n.summary)}</span>` : ''}
+            ${/^https?:\/\//.test(n.link || '') ? `<a href="${esc(n.link)}" target="_blank" rel="noopener">공지 보기</a>` : ''}
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // 시설을 종류별로 묶기 (시트에 새 종류가 생겨도 자동으로 섹션이 생김)
+      const groups = {};
+      facs.forEach(f => { (groups[f.type || '기타'] ||= []).push(f); });
+      const types = Object.keys(groups).sort((a, b) =>
+        (TYPE_ORDER.indexOf(a) + 1 || 99) - (TYPE_ORDER.indexOf(b) + 1 || 99));
+
+      if (!types.length) html += `<div class="section"><p class="empty">등록된 시설 정보가 없어요.</p></div>`;
+
+      types.forEach(t => {
+        const rows = groups[t].sort((a, b) => floorRank(a.floor) - floorRank(b.floor));
+        html += `<div class="section"><h3>${esc(TYPE_TITLES[t] || t)} (${rows.length})</h3>`;
+        rows.forEach(f => {
+          const fc = parseDate(f.last_checked);
+          html += `<div class="item">
+            ${photoHtml(photosByFac[f.facility_id])}
+            ${f.floor ? `<span class="floor">${esc(f.floor)}</span>` : ''}${esc(f.location_desc || (f.floor ? '' : '위치 정보 없음'))}
+            ${f.equipment ? `<span class="equip">${esc(f.equipment)}</span>` : ''}
+            ${fc ? `<span class="note">현장 확인 ${fmtDate(fc)}</span>` : ''}
+            ${f.note ? `<span class="note">${esc(f.note)}</span>` : ''}
+          </div>`;
+        });
+        html += `</div>`;
+      });
+
+      $('panel-body').innerHTML = html;
+      setCollapsed(false);   // 새 건물을 열면 항상 펼친 상태로
+      $('panel').scrollTop = 0;
+      $('panel').classList.add('open');
+      document.body.classList.add('panel-open');
+      $('panel').setAttribute('aria-hidden', 'false');
+      $('panel-close').focus({ preventScroll: true });
+    }
+    let clearSelection = () => { };   // 지도가 준비되면 실제 함수로 바뀜
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function closePanel() {
+      // 포커스가 패널 안에 있을 때만 지도로 돌려줌
+      // (패널을 숨기기 전에 옮겨야 스크린리더가 '보이지 않는 버튼'에 갇히지 않음)
+      if ($('panel').contains(document.activeElement)) map.getCanvas().focus();
+      clearSelection();
+      $('panel').classList.remove('open');
+      document.body.classList.remove('panel-open');
+      $('panel').setAttribute('aria-hidden', 'true');
+    }
+    function setCollapsed(on) {
+      $('panel').classList.toggle('collapsed', on);
+      $('panel-collapse').setAttribute('aria-expanded', String(!on));
+      $('panel-collapse').setAttribute('aria-label', on ? '상세 정보 펼치기' : '상세 정보 접기');
+    }
+    $('panel-collapse').addEventListener('click', () => setCollapsed(!$('panel').classList.contains('collapsed')));
+    $('panel-close').addEventListener('click', closePanel);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+    // ---------- 지도 ----------
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/positron',
+      center: [127.01716, 37.65142],
+      zoom: isMobile() ? 15.6 : 17, pitch: 55, bearing: 75
+    });
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');   // 패널과 겹치지 않게 왼쪽 위
+
+    map.on('load', async () => {
+      // 1) 건물을 먼저 회색으로 그리기
+      let geo;
+      try {
+        const res = await fetch(CONFIG.geojson);
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        geo = await res.json();
+      } catch (e) {
+        showStatus('GeoJSON을 불러오지 못했어요 (' + CONFIG.geojson + '): ' + e.message, true);
+        return;
+      }
+      geo.features.forEach(f => { f.properties.access_level = '정보 없음'; });
+
+      map.addSource('campus-buildings', { type: 'geojson', data: geo });
+      map.addLayer({
+        id: 'buildings-3d', source: 'campus-buildings', type: 'fill-extrusion',
+        paint: {
+          'fill-extrusion-color': ['match', ['get', 'access_level'],
+            '원활', LEVELS['원활'].color, '일부 제약', LEVELS['일부 제약'].color,
+            '어려움', LEVELS['어려움'].color, LEVELS['정보 없음'].color],
+          'fill-extrusion-height': ['coalesce', ['get', 'height'], 15],
+          'fill-extrusion-opacity': 0.9
+        }
+      });
+      // 선택 표시: 건물 바닥 둘레에 퍼지는 빛 (건물보다 아래에 그려서 바깥쪽만 보임)
+      const NONE = ['==', ['get', 'building_id'], '__none__'];
+      map.addLayer({   // 바깥으로 넓게 퍼지는 빛
+        id: 'select-glow', source: 'campus-buildings', type: 'line', filter: NONE,
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 26, 'line-blur': 16, 'line-opacity': 0.35 }
+      }, 'buildings-3d');
+      map.addLayer({   // 건물에 붙은 진한 빛
+        id: 'select-core', source: 'campus-buildings', type: 'line', filter: NONE,
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 8, 'line-blur': 4, 'line-opacity': 0.45 }
+      }, 'buildings-3d');
+      map.addLayer({   // 또렷한 테두리
+        id: 'select-edge', source: 'campus-buildings', type: 'line', filter: NONE,
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 2, 'line-opacity': 0.8 }
+      }, 'buildings-3d');
+
+      // 빛이 천천히 숨 쉬듯 밝아졌다 어두워짐 (움직임 줄이기 설정이면 고정)
+      let pulseId = null;
+      function startPulse() {
+        cancelAnimationFrame(pulseId);
+        if (reduceMotion) return;
+        const t0 = performance.now();
+        const tick = now => {
+          const k = (Math.sin((now - t0) / 450) + 1) / 2;        // 0~1
+          map.setPaintProperty('select-glow', 'line-opacity', 0.2 + 0.25 * k);
+          map.setPaintProperty('select-glow', 'line-width', 22 + 8 * k);
+          pulseId = requestAnimationFrame(tick);
+        };
+        pulseId = requestAnimationFrame(tick);
+      }
+
+      // 같은 building_id의 조각(예술관 3조각 등)을 모두 함께 선택
+      function selectBuilding(id) {
+        const f = ['==', ['get', 'building_id'], id];
+        ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, f));
+        startPulse();
+
+        // 건물 중심으로 부드럽게 이동 (패널에 가리지 않게 여백 확보)
+        let minX = 180, minY = 90, maxX = -180, maxY = -90;
+        geo.features.filter(g => g.properties.building_id === id).forEach(g => {
+          const polys = g.geometry.type === 'Polygon' ? [g.geometry.coordinates] : g.geometry.coordinates;
+          polys.flat(2).forEach(([x, y]) => {
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+          });
+        });
+        const mobile = window.innerWidth <= 700;
+        if (minX > maxX) return;   // 좌표를 못 찾으면 이동하지 않음
+        map.easeTo({
+          center: [(minX + maxX) / 2, (minY + maxY) / 2],
+          padding: mobile ? { bottom: window.innerHeight * 0.45 } : { right: $('panel').offsetWidth + 16 },  // 패널 너비만큼 비켜서 가운데 정렬
+          duration: reduceMotion ? 0 : 700
+        });
+      }
+      clearSelection = () => {
+        cancelAnimationFrame(pulseId);
+        ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, NONE));
+      };
+
+      showStatus('건물 ' + geo.features.length + '개 표시, 시트 불러오는 중…');
+
+      // 2) 시트 불러오기
+      let buildings, facilities;
+      try {
+        [buildings, facilities] = await Promise.all([loadCsv(CONFIG.buildingsCsv), loadCsv(CONFIG.facilitiesCsv)]);
+      } catch (e) {
+        showStatus('시트를 불러오지 못했어요: ' + (e && e.message ? e.message : e), true);
+        return;
+      }
+      if (!buildings.length || !('building_id' in buildings[0])) {
+        showStatus('buildings 시트에 building_id 열이 없어요. 첫 행 열 이름: ' +
+          (buildings[0] ? Object.keys(buildings[0]).join(', ') : '(비어 있음)'), true);
+        return;
+      }
+
+      // news·photos는 실패해도 지도는 그대로 보이도록 따로 불러오기
+      const [news, photos] = await Promise.all([
+        loadCsv(CONFIG.newsCsv).catch(() => []),
+        loadCsv(CONFIG.photosCsv).catch(() => [])
+      ]);
+
+      // 3) building_id로 합치기
+      const byId = {};
+      buildings.forEach(b => { byId[b.building_id] = b; });
+      const facsById = {};
+      facilities.forEach(f => { (facsById[f.building_id] ||= []).push(f); });
+      const newsById = {};      // 건물별 소식
+      news.forEach(n => { (newsById[n.building_id] ||= []).push(n); });
+      // 사진: facility_id가 있으면 그 시설 카드에, 비어 있고 building_id만 있으면 건물 상단에
+      const photosByFac = {}, photosByBld = {};
+      photos.forEach(p => {
+        if (p.facility_id) (photosByFac[p.facility_id] ||= []).push(p);
+        else if (p.building_id) (photosByBld[p.building_id] ||= []).push(p);
+      });
+
+      const missing = new Set();
+      geo.features.forEach(f => {
+        const row = byId[f.properties.building_id];
+        if (row && row.access_level) f.properties.access_level = row.access_level;
+        else missing.add(f.properties.building_id);
+      });
+      map.getSource('campus-buildings').setData(geo);
+
+      if (missing.size) showStatus('시트와 연결 안 된 building_id: ' + [...missing].join(', '), true);
+      else showStatus('시트 연결 완료: 건물 ' + buildings.length + '곳, 시설 ' + facilities.length + '건, 소식 ' + news.length + '건, 사진 ' + photos.length + '장');
+
+      // 4) 건물 클릭 → 상세 패널
+      map.on('click', 'buildings-3d', e => {
+        const id = e.features[0].properties.building_id;
+        const b = byId[id] || { building_id: id, name: e.features[0].properties.name, access_level: '정보 없음' };
+        try {
+          openPanel(b, facsById[id] || [], newsById[id] || [], photosByBld[id] || [], photosByFac);
+          selectBuilding(id);
+        } catch (err) { showStatus('건물 선택 오류: ' + err.message, true); }
+      });
+      map.on('mouseenter', 'buildings-3d', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'buildings-3d', () => { map.getCanvas().style.cursor = ''; });
+    });
+  </script>
+</body>
+
+</html>
