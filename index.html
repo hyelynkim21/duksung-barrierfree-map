@@ -320,7 +320,24 @@
       margin: 0 0 8px;
       font-size: 16px;
     }
+    .section summary {
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 6px 0;
+      margin-bottom: 8px;
+    }
 
+    .section .sub {
+      margin: 14px 0 6px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
     .item {
       background: var(--wash);
       border-radius: 8px;
@@ -386,6 +403,10 @@
       }
 
       .section h3 {
+        font-size: 18px;
+      }
+
+      .section summary {
         font-size: 18px;
       }
 
@@ -611,7 +632,7 @@
       // 변경 소식: 최신순
       const sorted = (news || []).slice().sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
       if (sorted.length) {
-        html += `<div class="section"><h3>변경 소식 (${sorted.length})</h3>`;
+        html += `<details class="section"><summary>변경 소식 (${sorted.length})</summary>`;
         sorted.forEach(n => {
           const d = parseDate(n.date);
           html += `<div class="item news">
@@ -620,7 +641,7 @@
             ${/^https?:\/\//.test(n.link || '') ? `<a href="${esc(n.link)}" target="_blank" rel="noopener">공지 보기</a>` : ''}
           </div>`;
         });
-        html += `</div>`;
+        html += `</details>`;
       }
 
       // 시설을 종류별로 묶기 (시트에 새 종류가 생겨도 자동으로 섹션이 생김)
@@ -631,9 +652,23 @@
 
       if (!types.length) html += `<div class="section"><p class="empty">등록된 시설 정보가 없어요.</p></div>`;
 
+      // 입구가 아닌 종류들 = '시설' 상자에 들어갈 것들
+      const facTypes = types.filter(t => t !== '입구');
+      // 시설 상자 뚜껑에 쓸 전체 개수
+      const facCount = facTypes.reduce((n, t) => n + groups[t].length, 0);
+
       types.forEach(t => {
         const rows = groups[t].sort((a, b) => floorRank(a.floor) - floorRank(b.floor));
-        html += `<div class="section"><h3>${esc(TYPE_TITLES[t] || t)} (${rows.length})</h3>`;
+
+        if (t === '입구') {
+          // 입구: 처음부터 열린 상자
+          html += `<details class="section" open><summary>입구 (${rows.length})</summary>`;
+        } else {
+          // 시설 종류 중 첫 번째일 때만 '시설' 상자를 연다
+          if (t === facTypes[0]) html += `<details class="section"><summary>시설 (${facCount})</summary>`;
+          // 상자 안의 작은 제목
+          html += `<h3 class="sub">${esc(TYPE_TITLES[t] || t)} (${rows.length})</h3>`;
+        }
         rows.forEach(f => {
           const fc = parseDate(f.last_checked);
           html += `<div class="item">
@@ -644,8 +679,9 @@
             ${f.note ? `<span class="note">${esc(f.note)}</span>` : ''}
           </div>`;
         });
-        html += `</div>`;
+        if (t === '입구') html += `</details>`;   // 입구 상자는 바로 닫기
       });
+      if (facTypes.length) html += `</details>`;  // 시설 상자는 반복이 다 끝난 뒤에 닫기
 
       $('panel-body').innerHTML = html;
       setCollapsed(false);   // 새 건물을 열면 항상 펼친 상태로
