@@ -584,15 +584,15 @@
   <div id="status"></div>
 
   <aside id="legend" aria-label="색상 안내">
-    <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">건물 색상 <span
+    <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">접근성 수준 <span
         aria-hidden="true">▾</span></button>
     <div id="legend-body">
       <ul id="legend-list"></ul>
-      <p>건물을 누르면 상세 정보가 열려요.</p>
+      <p>건물·길·입구(흰 점)를 누르면 상세 정보가 열려요.</p>
     </div>
   </aside>
 
-  <aside id="panel" aria-label="건물 상세 정보" aria-hidden="true">
+  <aside id="panel" aria-label="상세 정보" aria-hidden="true">
     <button id="panel-collapse" aria-label="상세 정보 접기" aria-expanded="true"><span aria-hidden="true">⌃</span></button>
     <button id="panel-close" aria-label="상세 정보 닫기">✕</button>
     <div id="panel-body"></div>
@@ -605,7 +605,9 @@
       facilitiesCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=1531722598&single=true&output=csv',
       newsCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=486532882&single=true&output=csv',
       photosCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=220985058&single=true&output=csv',
+      routesCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVVkzIMUqTnjzyvRSFm8Hde0z34_x3uaZzN6F5cfBV55bUmj1dMCiwVobxEr3Y5Pylyqago4S-VvZQ/pub?gid=1529881434&single=true&output=csv',
       geojson: 'data/buildings.geojson',
+      routesGeojson: 'data/routes.geojson', // 길 모양(선). 각 선의 속성 route_id가 시트 routes 탭과 같아야 함
       photoDir: 'photos/', // 사진 파일을 넣는 폴더 (시트 file 열에는 파일 이름만)
       recentDays: 90,   // 최종 확인일이 이 기간 안이면 '최근 확인' 배지 (한 학기+방학 기준)
       keepStatus: true, // 개발 중: 상태 메시지 계속 표시 (서비스 오픈 때 false로)
@@ -623,6 +625,14 @@
       '일부 제약': { color: '#f2a33a', desc: '일부 시설이 없거나 이용 조건이 있음' },
       '어려움': { color: '#d64545', desc: '휠체어로 진입할 수 있는 입구가 없음' },
       '정보 없음': { color: '#b0b0b0', desc: '판정할 자료가 없음' }
+    };
+
+    // 길에서의 접근성 수준 뜻 (색은 건물과 같은 LEVELS 색을 씀)
+    const ROUTE_DESC = {
+      '원활': '휠체어로 혼자 지나갈 수 있음',
+      '일부 제약': '지나갈 수는 있지만 주의가 필요하거나, 도움이 필요할 수 있음',
+      '어려움': '휠체어로 지나갈 수 없음',
+      '정보 없음': '현장에서 확인하지 않음'
     };
 
     // 패널에 시설을 보여 줄 순서 (목록에 없는 새 종류는 맨 뒤에 자동으로 붙음)
@@ -783,8 +793,26 @@
       });
       if (facTypes.length) html += `</details>`;  // 시설 상자는 반복이 다 끝난 뒤에 닫기
 
+      showPanelHtml(html);
+    }
+
+    // 길 패널: 이름(없으면 '출발 – 도착'), 수준, 이유(issue), 확인일, 근거(note)
+    function openRoutePanel(r) {
+      const level = LEVELS[r.condition] ? r.condition : '정보 없음';
+      const checked = parseDate(r.last_checked);
+      const recent = checked && (Date.now() - checked) / 86400000 <= CONFIG.recentDays;
+      showPanelHtml(`<h2>${esc(r.label)}</h2>
+        <div class="level"><span class="swatch" style="background:${LEVELS[level].color}"></span>${level}</div>
+        <p class="meta">${ROUTE_DESC[level]}</p>
+        ${r.issue ? `<p class="summary">${esc(r.issue)}</p>` : ''}
+        <p class="meta checked">${checked ? `최종 현장 확인 ${fmtDate(checked)}` : '현장 확인 기록 없음'}${recent ? '<span class="badge">최근 확인</span>' : ''}</p>
+        ${r.note ? `<p class="meta">${esc(r.note)}</p>` : ''}`);
+    }
+
+    // 건물·길 패널이 함께 쓰는 '패널 열기'
+    function showPanelHtml(html) {
       $('panel-body').innerHTML = html;
-      setCollapsed(false);   // 새 건물을 열면 항상 펼친 상태로
+      setCollapsed(false);   // 새로 열면 항상 펼친 상태로
       $('panel').scrollTop = 0;
       $('panel').classList.add('open');
       document.body.classList.add('panel-open');
@@ -867,6 +895,7 @@
       });
       // 선택 표시: 건물 바닥 둘레에 퍼지는 빛 (건물보다 아래에 그려서 바깥쪽만 보임)
       const NONE = ['==', ['get', 'building_id'], '__none__'];
+      const NONE_ROUTE = ['==', ['get', 'route_id'], '__none__'];
       map.addLayer({   // 바깥으로 넓게 퍼지는 빛
         id: 'select-glow', source: 'campus-buildings', type: 'line', filter: NONE,
         paint: { 'line-color': CONFIG.highlight, 'line-width': 26, 'line-blur': 16, 'line-opacity': 0.35 }
@@ -912,6 +941,7 @@
       // 같은 building_id의 조각(예술관 3조각 등)을 모두 함께 선택
       function selectBuilding(id) {
         const f = ['==', ['get', 'building_id'], id];
+        if (map.getLayer('route-select')) map.setFilter('route-select', NONE_ROUTE);   // 길 선택은 해제
         ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, f));
         startPulse();
 
@@ -928,6 +958,7 @@
       clearSelection = () => {
         cancelAnimationFrame(pulseId);
         ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, NONE));
+        if (map.getLayer('route-select')) map.setFilter('route-select', NONE_ROUTE);
       };
 
       showStatus('건물 ' + geo.features.length + '개 표시, 시트 불러오는 중…');
@@ -1004,9 +1035,6 @@
       liftTags();
       map.on('move', liftTags);
 
-      if (missing.size) showStatus('시트와 연결 안 된 building_id: ' + [...missing].join(', '), true);
-      else showStatus('시트 연결 완료: 건물 ' + buildings.length + '곳, 시설 ' + facilities.length + '건, 소식 ' + news.length + '건, 사진 ' + photos.length + '장');
-
       // 입구 마커: 시트 facilities에서 type이 '입구'이고 좌표가 있는 것만 점으로 만듦
       const entrances = {
         type: 'FeatureCollection',
@@ -1035,6 +1063,80 @@
         paint: { 'circle-radius': 22, 'circle-color': '#000000', 'circle-opacity': 0 }
       });
 
+      // ---------- 길 상태 ----------
+      // 길 모양은 data/routes.geojson(선마다 route_id 속성), 상태는 시트 routes 탭. route_id로 합침
+      // (파일이 없거나 비어 있어도 지도는 그대로 동작)
+      const EMPTY = { type: 'FeatureCollection', features: [] };
+      const lineW = isMobile() ? 6 : 5;   // 휴대폰은 조금 굵게
+      map.addSource('routes', { type: 'geojson', data: EMPTY });
+      map.addLayer({   // 선택한 길: 버건디 빛 (길 선 아래)
+        id: 'route-select', source: 'routes', type: 'line', filter: NONE_ROUTE,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': CONFIG.highlight, 'line-width': lineW + 12, 'line-blur': 4, 'line-opacity': 0.5 }
+      }, 'select-glow');
+      map.addLayer({   // 흰 테두리: 지도 바탕 위에서 길 색이 또렷하게 보이게
+        id: 'routes-casing', source: 'routes', type: 'line',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': lineW + 4 }
+      }, 'select-glow');
+      map.addLayer({   // 길 선: 접근성 수준 색 (건물과 같은 색)
+        id: 'routes-line', source: 'routes', type: 'line',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['match', ['get', 'condition'],
+            '원활', LEVELS['원활'].color, '일부 제약', LEVELS['일부 제약'].color,
+            '어려움', LEVELS['어려움'].color, LEVELS['정보 없음'].color],
+          'line-width': lineW
+        }
+      }, 'select-glow');
+      map.addLayer({   // 누르기 영역: 안 보이는 굵은 선(44px)
+        id: 'routes-hit', source: 'routes', type: 'line',
+        paint: { 'line-color': '#000000', 'line-width': 44, 'line-opacity': 0 }
+      }, 'entrance-dots');
+
+      const routeRows = await loadCsv(CONFIG.routesCsv).catch(() => []);
+      let routeGeo = EMPTY;
+      try {
+        const r = await fetch(CONFIG.routesGeojson);
+        if (r.ok) routeGeo = await r.json();
+      } catch (e) { /* 파일이 아직 없으면 길 없이 진행 */ }
+      const routeById = {};
+      routeRows.forEach(r => { if (r.route_id) routeById[r.route_id] = r; });
+      // 길 이름: name 칸 → 없으면 '출발 – 도착' → 그것도 없으면 route_id
+      const routeLabel = r => r.name || (r.from && r.to ? r.from + ' – ' + r.to : r.route_id);
+      routeGeo.features.forEach(f => {
+        f.properties = f.properties || {};
+        const row = routeById[f.properties.route_id];
+        f.properties.condition = row && LEVELS[row.condition] ? row.condition : '정보 없음';
+      });
+      map.getSource('routes').setData(routeGeo);
+      const drawn = new Set(routeGeo.features.map(f => f.properties.route_id));
+      const notDrawn = routeRows.map(r => r.route_id).filter(id => id && !drawn.has(id));
+
+      function selectRoute(id) {
+        clearSelection();   // 건물 선택 빛 끄기
+        map.setFilter('route-select', ['==', ['get', 'route_id'], id]);
+        // 길 전체가 들어오는 가운데로 이동
+        let minX = 180, minY = 90, maxX = -180, maxY = -90;
+        routeGeo.features.filter(g => g.properties.route_id === id).forEach(g => {
+          const pts = g.geometry.type === 'LineString' ? g.geometry.coordinates : g.geometry.coordinates.flat();
+          pts.forEach(([x, y]) => {
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+          });
+        });
+        if (minX > maxX) return;
+        map.easeTo({
+          center: [(minX + maxX) / 2, (minY + maxY) / 2],
+          padding: isMobile() ? { bottom: window.innerHeight * 0.6 } : { right: $('panel').offsetWidth + 16 },
+          duration: reduceMotion ? 0 : 700
+        });
+      }
+
+      if (missing.size) showStatus('시트와 연결 안 된 building_id: ' + [...missing].join(', '), true);
+      else showStatus('시트 연결 완료: 건물 ' + buildings.length + '곳, 시설 ' + facilities.length + '건, 소식 ' + news.length + '건, 사진 ' + photos.length + '장, 길 ' + routeGeo.features.length + '개'
+        + (notDrawn.length ? '\n(시트에는 있지만 선이 없는 길: ' + notDrawn.join(', ') + ')' : ''));
+
       // 건물 하나를 패널에 열고 지도에서 선택 표시 (건물 클릭·입구 마커 클릭에서 함께 씀)
       // focusId: 입구 마커로 열었을 때 그 입구의 facility_id (건물을 직접 누르면 null)
       function showBuilding(id, focusId, fallbackName) {
@@ -1055,6 +1157,18 @@
         const p = e.features[0].properties;
         showBuilding(p.building_id, p.facility_id);
       });
+      // 길 클릭 → 길 패널 (입구 마커나 건물이 같은 자리에 있으면 그쪽에 맡김)
+      map.on('click', 'routes-hit', e => {
+        if (map.queryRenderedFeatures(e.point, { layers: ['entrance-hit', 'buildings-3d'] }).length) return;
+        const id = e.features[0].properties.route_id;
+        const row = routeById[id] || { route_id: id };
+        try {
+          openRoutePanel({ ...row, label: routeLabel(row) });
+          selectRoute(id);
+        } catch (err) { showStatus('길 선택 오류: ' + err.message, true); }
+      });
+      map.on('mouseenter', 'routes-hit', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'routes-hit', () => { map.getCanvas().style.cursor = ''; });
       map.on('mouseenter', 'entrance-hit', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'entrance-hit', () => { map.getCanvas().style.cursor = ''; });
 
