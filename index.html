@@ -410,6 +410,13 @@
       background: var(--line);
     }
 
+    /* 맨 위 건물 사진만: 칸을 꽉 채우기 (시설 카드의 카드뉴스는 잘리지 않게 contain 유지) */
+    #panel-body > .photo img,
+    #panel-body > .gallery .photo img {
+      object-fit: cover;
+      object-position: center 65%;   /* 하늘을 덜고 입구 쪽을 남김 */
+    }
+
     /* 큰 화면: 패널이 넓어진 만큼 사진과 글자도 키움 */
     @media (min-width: 1400px) {
       .photo img {
