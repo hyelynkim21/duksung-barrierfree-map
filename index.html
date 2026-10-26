@@ -417,6 +417,18 @@
       object-position: center 65%;   /* 하늘을 덜고 입구 쪽을 남김 */
     }
 
+    /* 사진을 누르면 새 창에서 원본 크기로 (확대·축소는 브라우저 기능 사용) */
+    .photo-link {
+      display: block;
+      cursor: zoom-in;
+      border-radius: 8px;
+    }
+
+    .photo-link:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
     /* 큰 화면: 패널이 넓어진 만큼 사진과 글자도 키움 */
     @media (min-width: 1400px) {
       .photo img {
@@ -501,12 +513,14 @@
       position: absolute;
       top: 6px;
       left: 6px;
+      z-index: 1;   /* 사진 링크 위에 보이게 */
       padding: 2px 8px;
       border-radius: 10px;
       background: rgba(0, 0, 0, .6);
       color: #fff;
       font-size: 12px;
       font-weight: 700;
+      pointer-events: none;   /* 숫자 위를 눌러도 사진이 열리게 */
     }
 
     .photo .changed {
@@ -670,6 +684,7 @@
     // 시트 file 열: 파일 이름만 쓰면 photoDir 폴더에서, http로 시작하면 그 주소에서 불러옴
     const photoSrc = file => /^https?:\/\//.test(file) ? file : CONFIG.photoDir + file;
     // 같은 facility_id에 사진이 여러 장이면 step 순서로 옆으로 넘겨 보는 갤러리가 됨
+    // 사진을 누르면 새 창에서 사진만 열림 (휴대폰은 두 손가락, PC는 클릭·Ctrl+휠로 확대)
     function photoHtml(list) {
       const items = (list || [])
         .filter(p => p.file)
@@ -680,10 +695,14 @@
         const d = parseDate(p.photo_date);
         const info = [p.caption, d ? '촬영 ' + fmtDate(d) : '', p.source ? '출처: ' + p.source : '']
           .filter(Boolean).map(esc).join(' · ');
+        const src = esc(photoSrc(p.file));
         return `<figure class="photo">
           ${many ? `<span class="step">${i + 1} / ${items.length}</span>` : ''}
-          <img src="${esc(photoSrc(p.file))}" alt="${esc(p.caption || '시설 사진')}" loading="lazy"
-            onerror="this.closest('figure').remove()">
+          <a class="photo-link" href="${src}" target="_blank" rel="noopener"
+            aria-label="${esc((p.caption || '사진') + ' 크게 보기 (새 창)')}">
+            <img src="${src}" alt="${esc(p.caption || '시설 사진')}" loading="lazy"
+              onerror="this.closest('figure').remove()">
+          </a>
           <figcaption>${info}${p.change_after_photo ? `<span class="changed">촬영 이후 변경: ${esc(p.change_after_photo)}</span>` : ''}</figcaption>
         </figure>`;
       }).join('');
