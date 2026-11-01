@@ -1,4 +1,12 @@
 <!DOCTYPE html>
+<!--
+  덕성여자대학교 배리어프리 캠퍼스 맵 (TwinVision)
+  - 접근성 정보는 구글 시트(buildings·facilities·news·photos·routes 탭)를 CSV로 불러와 표시함
+    → 내용을 고칠 때는 코드가 아니라 시트를 고치면 됨
+  - 건물 모양: data/buildings.geojson, 길 모양: data/routes.geojson, 사진: photos/
+  - 설정(시트 주소, 탭 켜고 끄기, 길찾기 기준, 네이버 키 등)은 아래 스크립트 맨 앞의 CONFIG 한 곳에 모여 있음
+  - 지도: MapLibre GL JS / 배경 지도: OpenFreeMap (© OpenStreetMap 기여자)
+-->
 <html lang="ko">
 
 <head>
@@ -12,24 +20,29 @@
     rel="stylesheet" />
   <style>
     :root {
-      --ink: #1d2622;
-      /* 본문 글자 */
-      --muted: #5b6660;
-      /* 보조 글자 */
-      --line: #dde3df;
-      /* 구분선 */
-      --paper: #ffffff;
-      /* 패널 바탕 */
-      --wash: #f3f6f4;
-      /* 섹션 바탕 */
-      --focus: #1f6feb;
-      /* 키보드 포커스 */
-      --select: #991e66;
-      /* 선택 표시 (JS에서 CONFIG.highlight 값으로 덮어씀) */
+      --ink: #252525;            /* 본문 글자 */
+      --muted: #68716c;          /* 보조 글자 */
+      --line: #e5e7e9;           /* 구분선 */
+      --paper: #ffffff;          /* 카드·패널 바탕 */
+      --wash: #f1f4f2;           /* 연회색 바탕 */
+      --focus: #1f6feb;          /* 키보드 포커스 */
+      --select: #b70050;         /* 선택 표시 (JS에서 CONFIG.highlight 값으로 덮어씀) */
+      --brand: #b70050;          /* 덕성여대 버건디: 머리줄·주요 버튼 */
+      --brand-hover: #980043;
+      --brand-light: #f9e8ef;    /* 아주 연한 학교 색 (선택 탭·최근 소식 등에만) */
+      --hdr-h: 74px;             /* 머리줄 높이 (아래쪽은 탭 줄이 덮음) */
+      --tab-h: 58px;             /* 탭 줄 높이 */
+      --tab-overlap: 16px;       /* 둥근 탭 줄이 머리줄 위로 겹치는 높이 */
+      --top-h: calc(var(--hdr-h) + var(--tab-h) - var(--tab-overlap));   /* 지도가 시작하는 높이 */
+      --panel-w: clamp(380px, 32vw, 640px);   /* PC 왼쪽 패널 너비 */
     }
 
     * {
       box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
     }
 
     html,
@@ -44,16 +57,215 @@
       color: var(--ink);
     }
 
-    #map {
+    /* ---------- 맨 위 고정: 머리줄(로고·제목) + 탭 ---------- */
+    #topbar {
       position: fixed;
-      inset: 0;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
     }
 
-    /* 상태 메시지 */
+    #header {
+      height: var(--hdr-h);
+      background: var(--brand);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      padding: 0 20px var(--tab-overlap);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+
+    .brand:focus-visible {
+      outline: 3px solid #ffffff;
+      outline-offset: 3px;
+    }
+
+    /* 로고: 높이만 정하고 너비는 원본 비율대로 */
+    .brand img {
+      height: 38px;
+      width: auto;
+      display: block;
+    }
+
+    /* 흰 바탕 로고를 쓸 때: 흰 둥근 판 위에 올린 것처럼 (CONFIG.logoOnWhite) */
+    .brand img.on-white {
+      background: #ffffff;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    /* 로고와 제목 사이 세로 구분선 (로고가 있을 때만) */
+    .brand img:not([hidden]) + .brand-text {
+      padding-left: 14px;
+      border-left: 1px solid rgba(255, 255, 255, .35);
+    }
+
+    .brand-text b {
+      display: block;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .brand-text small {
+      display: block;
+      font-size: 12px;
+      opacity: .8;
+    }
+
+    /* 탭 줄: 위 모서리를 둥글게 해서 머리줄 위로 살짝 올라탄 판처럼 */
+    #tabs {
+      position: relative;
+      height: var(--tab-h);
+      margin-top: calc(-1 * var(--tab-overlap));
+      background: var(--paper);
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      padding: 6px 16px 0;
+      border-radius: 22px 22px 0 0;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, .08), 0 4px 10px rgba(0, 0, 0, .06);
+    }
+
+    .tab {
+      flex: 0 1 300px;
+      border-radius: 14px 14px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      position: relative;
+      border: 0;
+      background: none;
+      color: var(--muted);
+      font: 600 16px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .tab svg {
+      width: 20px;
+      height: 20px;
+      flex: none;
+    }
+
+    .tab:hover {
+      color: var(--ink);
+    }
+
+    /* 탭 사이 짧고 둥근 회색 구분선 */
+    .tab + .tab::before {
+      content: '';
+      position: absolute;
+      left: -8px;   /* 탭 사이 간격(14px)의 가운데 */
+      top: 50%;
+      width: 2px;
+      height: 18px;
+      margin-top: -9px;
+      border-radius: 2px;
+      background: #d3d9d5;
+    }
+
+    .tab[aria-selected="true"] {
+      color: var(--brand);
+      background: var(--brand-light);
+      font-weight: 700;
+    }
+
+    /* 선택한 탭 아래 굵은 선 */
+    .tab[aria-selected="true"]::after {
+      content: '';
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 0;
+      height: 4px;
+      border-radius: 4px;
+      background: var(--brand);
+    }
+
+    .tab:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: -3px;
+    }
+
+    @media (max-width: 700px) {
+      :root {
+        --hdr-h: 60px;
+        --tab-h: 50px;
+        --tab-overlap: 12px;
+      }
+
+      #header {
+        padding: 0 12px;
+      }
+
+      .brand {
+        gap: 10px;
+      }
+
+      .brand img {
+        height: 30px;
+      }
+
+      .brand img:not([hidden]) + .brand-text {
+        padding-left: 10px;
+      }
+
+      .brand-text b {
+        font-size: 15px;
+      }
+
+      .brand-text small {
+        display: none;
+      }
+
+      #tabs {
+        gap: 6px;
+        padding: 5px 8px 0;
+        border-radius: 16px 16px 0 0;
+      }
+
+      .tab + .tab::before {
+        left: -4px;
+        height: 16px;
+        margin-top: -8px;
+      }
+
+      .tab {
+        flex: 1 1 0;
+        font-size: 14px;
+        gap: 5px;
+      }
+
+      .tab svg {
+        width: 17px;
+        height: 17px;
+      }
+    }
+
+    /* 지도: 머리줄·탭 아래부터 화면 끝까지 */
+    #map {
+      position: fixed;
+      top: var(--top-h);
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    /* 상태 메시지: 지도 왼쪽 위 */
     #status {
       position: fixed;
-      top: 12px;
-      left: 56px;   /* 왼쪽 위 확대·축소 버튼 오른쪽 */
+      top: calc(var(--top-h) + 12px);
+      left: 12px;
       z-index: 10;
       background: var(--paper);
       padding: 8px 12px;
@@ -62,6 +274,7 @@
       box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
       max-width: 60vw;
       white-space: pre-wrap;
+      user-select: text;
     }
 
     #status.error {
@@ -72,15 +285,19 @@
       display: none;
     }
 
-    /* 범례 */
+    /* 범례: 지도 왼쪽 아래, 가로 한 줄 */
     #legend {
       position: fixed;
       left: 12px;
       bottom: 28px;
       z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      max-width: calc(100vw - 100px);   /* 오른쪽 아래 확대·축소 버튼과 겹치지 않게 */
       background: var(--paper);
-      border-radius: 8px;
-      padding: 10px 14px;
+      border-radius: 28px;   /* 패널과 같은 둥글기 */
+      padding: 12px 22px;
       box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
       font-size: 13px;
     }
@@ -88,18 +305,14 @@
     #legend-toggle {
       all: unset;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      display: block;
-      margin-bottom: 6px;
+      white-space: nowrap;
+      flex: none;
     }
 
     #legend.collapsed #legend-body {
       display: none;
-    }
-
-    #legend.collapsed #legend-toggle {
-      margin-bottom: 0;
     }
 
     #legend.collapsed #legend-toggle span {
@@ -113,18 +326,32 @@
       border-radius: 4px;
     }
 
+    /* 범례 너비는 색 목록(카페까지) 길이로 정하고, 설명 글은 그 너비 안에서 줄바꿈 */
+    #legend-body {
+      display: grid;
+      gap: 4px;
+    }
+
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+    }
+
     #legend ul {
       list-style: none;
       margin: 0;
       padding: 0;
-      display: grid;
-      gap: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
     }
 
     #legend li {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      white-space: nowrap;
     }
 
     .swatch {
@@ -134,25 +361,138 @@
       flex: none;
     }
 
+    /* 범례 설명 글: 색 목록 아래 한 줄 */
     #legend p {
-      margin: 8px 0 0;
+      width: 0;
+      min-width: 100%;   /* 글이 범례를 넓히지 않게 */
+      word-break: keep-all;   /* 낱말 중간에서 줄이 바뀌지 않게 */
+      margin: 2px 0 0;
+      line-height: 1.45;
       color: var(--muted);
       font-size: 12px;
     }
 
-    /* 상세 패널 (PC: 오른쪽, 모바일: 아래) */
+    /* PC: 범례는 왼쪽 아래에 고정 (패널이 열려도 움직이지 않음)
+       상세 패널·길 찾기 카드는 범례 바로 위에서 끝나게 해서 겹치지 않음 (--legend-h는 JS가 범례 높이로 채움)
+       상태 메시지만 패널 오른쪽으로 비킴 */
+    @media (min-width: 701px) {
+      #legend {
+        left: 16px;
+        bottom: 24px;
+      }
+
+      body.panel-open #status {
+        left: calc(var(--panel-w) + 32px);
+      }
+    }
+
+    /* 상세 캠퍼스 탭에서는 지도용 범례·상태 메시지 숨김 */
+    body[data-tab="detail"] #legend,
+    body[data-tab="detail"] #status {
+      display: none;
+    }
+
+    /* 2D·3D 전환 버튼 (오른쪽 아래, 확대·축소 버튼 위) */
+    .maplibregl-ctrl-group button.view-toggle {
+      font: 700 12px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      color: var(--ink);
+    }
+
+    /* 오른쪽 아래 버튼 묶음: 손가락으로 누르기 쉽게 조금 크게 */
+    .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button {
+      width: 36px;
+      height: 36px;
+    }
+
+    .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+      margin: 0 12px 10px 0;
+      border-radius: 8px;
+    }
+
+    /* 카페 마커: 접근성 4색과 헷갈리지 않게 진한 바탕에 컵 그림 (버튼이라 Tab으로도 선택 가능) */
+    .cafe-marker {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+    }
+
+    .cafe-marker svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* 카페 마크를 이미지로 쓸 때: 동그라미 틀 없이 이미지만 (그림자로 지도 위에서 또렷하게) */
+    .cafe-marker.has-img {
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .cafe-marker.has-img img,
+    .legend-cafe.has-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45));
+    }
+
+    .legend-cafe.has-img {
+      background: transparent;
+    }
+
+    /* 위로 올린 카페: 아이콘 아래에서 실제 위치까지 짧은 선 */
+    .cafe-marker.lifted::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 100%;
+      width: 2px;
+      height: var(--lift);
+      margin-left: -1px;
+      background: var(--ink);
+      pointer-events: none;
+    }
+
+    .legend-cafe {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+
+    .legend-cafe svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    /* 상세 패널 (PC: 왼쪽 카드, 모바일: 아래) */
     #panel {
       position: fixed;
-      top: 0;
-      right: 0;
+      top: var(--top-h);
+      left: 0;
       bottom: 0;
-      width: clamp(380px, 32vw, 640px);   /* 큰 화면일수록 넓게, 최대 640px */
+      width: var(--panel-w);
       z-index: 20;
       background: var(--paper);
-      box-shadow: -2px 0 12px rgba(0, 0, 0, .18);
+      box-shadow: 2px 0 12px rgba(0, 0, 0, .18);
       overflow-y: auto;
       padding: 20px 22px 32px;
-      transform: translateX(100%);
+      transform: translateX(-100%);
       transition: transform .2s ease;
     }
 
@@ -173,7 +513,7 @@
         width: 100%;
         height: 60vh;    /* dvh를 모르는 옛 브라우저용 */
         height: 60dvh;   /* iOS 사파리 주소창을 뺀 실제 화면 기준 */
-        border-radius: 14px 14px 0 0;
+        border-radius: 22px 22px 0 0;   /* 길 찾기 카드(휴대폰)와 같은 둥글기 */
         box-shadow: 0 -2px 12px rgba(0, 0, 0, .18);
         transform: translateY(100%);
         padding: 16px 18px 28px;
@@ -185,13 +525,16 @@
 
       #legend {
         bottom: 16px;
-        padding: 8px 12px;
+        border-radius: 22px;
+        padding: 9px 16px;
         font-size: 12px;
+        gap: 10px;
+        max-width: calc(100vw - 80px);
       }
 
       #status {
-        top: 8px;
-        left: 52px;
+        top: calc(var(--top-h) + 8px);
+        left: 8px;
         font-size: 12px;
         padding: 6px 10px;
         max-width: 70vw;
@@ -203,15 +546,15 @@
       }
     }
 
-    /* PC·태블릿: 오른쪽에서 살짝 띄운 카드 */
+    /* PC·태블릿: 왼쪽에서 살짝 띄운 카드 */
     @media (min-width: 701px) {
       #panel {
-        top: 16px;
-        right: 16px;
-        bottom: 16px;
-        border-radius: 16px;
+        top: calc(var(--top-h) + 16px);
+        left: 16px;
+        bottom: calc(var(--legend-h, 64px) + 36px);   /* 범례(아래 24px + 높이) 위 12px 간격 */
+        border-radius: 28px;   /* 길 찾기 카드와 같은 둥글기 */
         box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
-        transform: translateX(calc(100% + 24px));
+        transform: translateX(calc(-100% - 24px));
       }
 
       #panel.open {
@@ -231,7 +574,7 @@
       }
     }
 
-    #panel.collapsed #panel-body > *:not(h2):not(.level):not(.checked) {
+    #panel.collapsed #panel-body > *:not(h2):not(.bld-level) {
       display: none;
     }
 
@@ -283,12 +626,783 @@
       line-height: 1.3;
     }
 
-    .level {
-      display: inline-flex;
+    /* ---------- 길찾기 카드 ---------- */
+    #route-view {
+      --goal: #6aab0d;   /* 도착 핀 색 (출발은 학교 색 --select) */
+      position: fixed;
+      z-index: 20;
+      background: var(--paper);
+      padding: 26px 26px 18px;
+      overflow-x: hidden;   /* 긴 이름 때문에 옆으로 밀려 잘리지 않게 */
+    }
+
+    @media (min-width: 701px) {
+      #route-view {
+        top: calc(var(--top-h) + 16px);
+        left: 16px;
+        border-radius: 28px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+        max-height: calc(100vh - var(--top-h) - var(--legend-h, 64px) - 52px);   /* 범례 위에서 끝나게 */
+        overflow-y: auto;
+      }
+    }
+
+    @media (max-width: 700px) {
+      #route-view {
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 22px 22px 0 0;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, .18);
+        padding: 18px 18px 14px;
+        max-height: 60vh;
+        max-height: 60dvh;
+        overflow-y: auto;
+      }
+    }
+
+    /* 제목 줄: 아이콘 + '길 찾기' + 오른쪽 위 (i) */
+    .rv-head {
+      position: relative;
+      display: flex;
       align-items: center;
-      gap: 6px;
-      font-weight: 700;
+      gap: 12px;
+      padding-right: 44px;
+    }
+
+    .rv-icon {
+      width: 38px;
+      height: 38px;
+      color: var(--select);
+      flex: none;
+    }
+
+    #route-view h2 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .rv-info {
+      position: absolute;
+      top: -10px;
+      right: -8px;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 50%;
+      background: none;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+
+    .rv-info svg {
+      width: 30px;
+      height: 30px;
+    }
+
+    .rv-tip {
+      margin: 12px 0 0;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--paper);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .14);
       font-size: 14px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    @media (max-width: 700px) {
+      .rv-icon {
+        width: 30px;
+        height: 30px;
+      }
+
+      #route-view h2 {
+        font-size: 22px;
+      }
+    }
+
+    /* 출발·도착 칸: 핀 + 굵은 이름 | 고른 건물 ⌄ , 오른쪽에 ⇅ */
+    .nav-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 56px;
+      column-gap: 8px;
+      row-gap: 16px;
+      margin-top: 24px;
+    }
+
+    .nav-field {
+      grid-column: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      min-height: 64px;
+      padding: 0 0 0 18px;
+      border: 2px solid #d9dddb;
+      border-radius: 10px;
+      background: #f2f3f3;
+      cursor: pointer;
+    }
+
+    .nav-field:focus-within {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    /* 오른쪽 꺾쇠 */
+    .nav-field::after {
+      content: '';
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      width: 11px;
+      height: 11px;
+      margin-top: -9px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(45deg);
+      pointer-events: none;
+    }
+
+    .nav-field .pin {
+      width: 24px;
+      height: 32px;
+      flex: none;
+    }
+
+    .nf-label {
+      font-size: 25px;
+      font-weight: 700;
+      padding-right: 16px;
+      border-right: 1.5px solid #c4c9c6;
+      line-height: 1.4;
+      white-space: nowrap;
+      flex: none;
+    }
+
+    /* 고르는 칸이 오른쪽 끝(꺾쇠 자리)까지 덮어서 꺾쇠를 눌러도 목록이 열림 */
+    .nav-field select {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      height: 60px;
+      padding: 0 44px 0 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font: 500 22px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      outline: none;
+    }
+
+    #nav-swap {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      justify-self: center;
+      width: 48px;
+      height: 56px;
+      border: 0;
+      background: none;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+    }
+
+    #nav-swap svg {
+      width: 40px;
+      height: 46px;
+    }
+
+    .nav-form .check {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      font-size: 18px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .nav-form .check input {
+      width: 26px;
+      height: 26px;
+      margin: 0;
+      accent-color: var(--select);
+    }
+
+    .nav-form .check input:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .nav-clear {
+      grid-column: 1 / -1;
+      justify-self: start;
+      margin-top: -4px;
+      border: 0;
+      background: none;
+      padding: 4px 0;
+      color: #1a49e6;
+      font: 500 17px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    @media (max-width: 700px) {
+      .nav-form {
+        grid-template-columns: minmax(0, 1fr) 44px;
+        row-gap: 10px;
+        margin-top: 16px;
+      }
+
+      .nav-field {
+        min-height: 56px;
+        padding: 0 0 0 12px;
+        gap: 10px;
+      }
+
+      .nav-field select {
+        padding-right: 36px;
+      }
+
+      .nav-form .check {
+        font-size: 16px;
+      }
+
+      .nav-field::after {
+        right: 14px;
+      }
+
+      .nf-label {
+        font-size: 21px;
+        padding-right: 12px;
+      }
+
+      .nav-field select {
+        height: 52px;
+        font-size: 19px;
+      }
+    }
+
+    /* 결과: 위쪽 구분선 */
+    #nav-result:not(:empty) {
+      margin: 14px -12px 0;
+      padding: 18px 12px 0;
+      border-top: 2px solid #dcdfdd;
+    }
+
+    .nav-summary {
+      margin: 6px 0 17px;   /* 아래 '이동 시 유의사항'과 간격 */
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-summary span {
+      color: #8a8f8c;
+      font-weight: 700;
+    }
+
+    /* 이동 시 유의사항 (접기) */
+    .nav-caution {
+      border: 2px solid #f5b63c;
+      border-radius: 10px;
+      background: #fdebd2;
+      margin-bottom: 18px;
+    }
+
+    .nav-caution summary {
+      list-style: none;
+      position: relative;
+      padding: 9px 44px 9px 20px;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .nav-caution summary::-webkit-details-marker,
+    .nav-ref summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .nav-caution summary::after,
+    .nav-ref summary::after {
+      content: '';
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      margin-top: -8px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      opacity: .6;
+    }
+
+    .nav-caution[open] summary::after,
+    .nav-ref[open] summary::after {
+      transform: rotate(-135deg);
+      margin-top: -3px;
+    }
+
+    .nav-caution summary:focus-visible,
+    .nav-ref summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
+
+    .nav-caution ul {
+      margin: 0;
+      padding: 10px 20px 14px 40px;
+      border-top: 1px solid #f3cf8e;
+      background: #fff6e9;
+      border-radius: 0 0 8px 8px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .nav-caution li.strong {
+      color: #b3261e;
+      font-weight: 700;
+    }
+
+    /* 단계 타임라인: 출발 핀 → 구간 → 도착 핀 */
+    .tl {
+      list-style: none;
+      margin: 0 0 22px;
+      padding: 0;
+    }
+
+    /* 출발·도착 핀을 세로선보다 위에 그려서, 선이 핀 끝과 겹쳐 비치지 않게 */
+    .tl-end {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: flex-start;
+      gap: 22px;
+    }
+
+    .tl-end .pin {
+      width: 36px;
+      height: 48px;
+      flex: none;
+    }
+
+    .tl-end b {
+      display: block;
+      font-size: 25px;
+      line-height: 1.25;
+      margin-top: 4px;
+    }
+
+    .tl-sub {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 14px;
+      font-size: 18px;
+      word-break: keep-all;
+    }
+
+    .tl-step {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 72px;
+      padding-left: 60px;
+      font-size: 18px;
+      word-break: keep-all;   /* 낱말 중간에서 줄이 바뀌지 않게 */
+    }
+
+    /* 세로선: 구간은 실선, 입구–길(조사 안 한 구간)은 점선 */
+    .tl-step::before {
+      content: '';
+      position: absolute;
+      left: 17px;
+      top: -6px;
+      bottom: -6px;
+      border-left: 2px solid #b9bebb;
+    }
+
+    .tl-step.gap::before {
+      border-left-style: dashed;
+    }
+
+    .tl-dot {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      margin-top: -7px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: 2px solid #b9bebb;
+      z-index: 1;
+    }
+
+    .tl-len {
+      min-width: 4.6em;   /* '약 324m'까지 들어가게 (글자 크기에 맞춰 늘어남) */
+      padding-right: 14px;
+      border-right: 1.5px solid #c4c9c6;
+      font-size: 23px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .tl-txt {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 14px;
+    }
+
+    /* 접근성 수준 꼬리표 */
+    .chip {
+      display: inline-block;
+      padding: 2px 14px;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .chip.lv-ok { background: #ddf3d9; color: #2f8a2a; }
+    .chip.lv-part { background: #fff0d6; color: #d98a00; }
+    .chip.lv-hard { background: #fde0de; color: #c62f2f; }
+    .chip.lv-none { background: #eceeed; color: #6b716e; }
+
+    @media (max-width: 700px) {
+      .nav-summary {
+        font-size: 26px;
+      }
+
+      .tl-step {
+        padding-left: 52px;
+        min-height: 62px;
+      }
+
+      .tl-end {
+        gap: 14px;
+      }
+
+      .tl-len {
+        font-size: 21px;
+      }
+    }
+
+    .nav-box {
+      display: grid;
+      gap: 4px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .nav-warn {
+      background: #fff6e6;
+      border-left: 4px solid #f2a33a;
+    }
+
+    .nav-fail {
+      background: #fdecec;
+      border-left: 4px solid #d64545;
+    }
+
+    /* 건물 패널의 '이 건물로 안내하기' 버튼 · 거리뷰 미리보기 버튼 */
+    .route-cta,
+    .nav-pv-start {
+      display: block;
+      width: 100%;
+      margin: 12px 0 4px;
+      padding: 12px 14px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--select);
+      color: #ffffff;
+      font: 700 15px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .nav-pv-start {
+      margin: 0 0 18px;
+      padding: 16px 14px;
+      font-size: 19px;
+    }
+
+    .nav-pv-start:disabled {
+      opacity: .6;
+      cursor: wait;
+    }
+
+    /* 경로 미리 보기: 연분홍 상자 (아래 '참고용 안내' 포함) */
+    .nav-pv {
+      margin: 0 -14px;
+      padding: 22px 30px 26px;
+      border-radius: 28px;
+      background: var(--brand-light);
+    }
+
+    .nav-pv h3 {
+      margin: 0 0 16px;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--select);
+    }
+
+    .nav-pv-view {
+      position: relative;
+      height: 220px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--line);
+    }
+
+    #nav-pv-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    #nav-pv-inner.off {
+      visibility: hidden;
+    }
+
+    /* 이동 방향 띠: 사진 위에 겹치고, 사진 끌기는 그대로 되게 클릭은 통과 */
+    .nav-pv-guide {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .nav-pv-guide .band {
+      fill: var(--select);
+      fill-opacity: .5;
+    }
+
+    .nav-pv-guide .chev {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .nav-pv-empty {
+      position: absolute;
+      z-index: 3;
+      inset: 0;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .nav-pv-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .nav-pv-bar button {
+      min-height: 40px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 20px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 600 14px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .nav-pv-bar button:disabled {
+      opacity: .4;
+      cursor: default;
+    }
+
+    .nav-pv-cap,
+    .nav-pv .pv-note {
+      margin: 8px 0;
+      font-size: 16px;
+      word-break: keep-all;
+      line-height: 1.5;
+    }
+
+    .nav-pv-cap:empty {
+      display: none;
+    }
+
+    .nav-pv .pv-note {
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* 참고용 안내 (접기) */
+    .nav-ref {
+      border-radius: 10px;
+      background: #e9eaea;
+    }
+
+    .nav-ref summary {
+      list-style: none;
+      position: relative;
+      padding: 8px 44px 8px 20px;
+      font-size: 17px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .nav-ref summary small {
+      margin-left: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .nav-ref div {
+      display: grid;
+      gap: 6px;
+      padding: 12px 20px 14px;
+      background: var(--paper);
+      border-radius: 0 0 10px 10px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .nav-ref ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 700px) {
+      .nav-pv {
+        margin: 0 -8px;
+        padding: 18px 18px 20px;
+        border-radius: 22px;
+      }
+
+      .nav-pv-view {
+        height: 180px;
+      }
+    }
+
+    /* 지도 위 거리뷰 위치·방향 표시 (위쪽 화살표가 보는 방향) */
+    .nav-eye {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--focus);
+      border: 3px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+      pointer-events: none;
+    }
+
+    .nav-eye::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: -13px;
+      margin-left: -6px;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 10px solid var(--focus);
+    }
+
+    /* 내 위치: 파란 점 (움직임 줄이기 설정이 아니면 은은하게 맥박) */
+    .me-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #1f6feb;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(31, 111, 235, .5), 0 1px 4px rgba(0, 0, 0, .35);
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .me-dot {
+        animation: me-pulse 2s ease-out infinite;
+      }
+
+      @keyframes me-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(31, 111, 235, .45), 0 1px 4px rgba(0, 0, 0, .35); }
+        100% { box-shadow: 0 0 0 14px rgba(31, 111, 235, 0), 0 1px 4px rgba(0, 0, 0, .35); }
+      }
+    }
+
+    .locate-btn svg {
+      width: 20px;
+      height: 20px;
+      color: var(--ink);
+    }
+
+    /* 지도 위 출발·도착 핀 */
+    .nav-pin {
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: var(--select);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+      pointer-events: none;
+    }
+
+    .nav-pin.to {
+      background: #6aab0d;
+    }
+
+    /* 상세 캠퍼스 탭: 지도 자리를 덮는 화면 (3D 모델을 넣기 전까지는 안내만) */
+    #detail-view {
+      position: fixed;
+      top: var(--top-h);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 15;
+      background: var(--wash);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    #detail-view h2 {
+      margin: 0 0 10px;
+      font-size: 22px;
+    }
+
+    #detail-view p {
+      margin: 0 0 6px;
+      line-height: 1.6;
     }
 
     .summary {
@@ -298,7 +1412,7 @@
 
     .meta {
       margin: 0;
-      font-size: 13px;
+      font-size: 14px;
       color: var(--muted);
       line-height: 1.6;
     }
@@ -355,35 +1469,9 @@
       line-height: 1.55;
     }
 
-    /* 입구 마커로 연 입구: 선택한 건물 빛과 같은 버건디 테두리로 강조 */
-    .item.focus {
-      background: var(--paper);
-      outline: 2px solid var(--select);
-    }
-
-    .item .tag {
-      display: inline-block;
-      margin-bottom: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--select);
-    }
-
-    .item .floor {
-      font-weight: 700;
-      margin-right: 6px;
-    }
-
     .item .equip {
       display: block;
       font-size: 14px;
-    }
-
-    .item .note {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 2px;
     }
 
     .empty {
@@ -391,13 +1479,9 @@
       font-size: 14px;
     }
 
-    /* 사진 (건물 사진은 상단, 시설 사진은 각 카드 맨 위) */
+    /* 사진 (건물 사진은 패널 위쪽, 시설 사진은 카드 안) */
     .photo {
       margin: 12px 0 4px;
-    }
-
-    .item .photo {
-      margin: 0 0 8px;
     }
 
     /* 세로(카드뉴스 3:4)·가로 사진이 섞여도 잘리지 않게: 같은 높이 틀 안에 사진 전체를 보여줌 */
@@ -410,14 +1494,14 @@
       background: var(--line);
     }
 
-    /* 맨 위 건물 사진만: 칸을 꽉 채우기 (시설 카드의 카드뉴스는 잘리지 않게 contain 유지) */
+    /* 맨 위 건물 사진만: 칸을 꽉 채우기 (시설 카드 사진은 잘리지 않게 contain 유지) */
     #panel-body > .photo img,
     #panel-body > .gallery .photo img {
       object-fit: cover;
       object-position: center 65%;   /* 하늘을 덜고 입구 쪽을 남김 */
     }
 
-    /* 사진을 누르면 새 창에서 원본 크기로 (확대·축소는 브라우저 기능 사용) */
+    /* 사진을 누르면 화면 안에서 크게 보기 */
     .photo-link {
       display: block;
       cursor: zoom-in;
@@ -457,7 +1541,6 @@
       }
 
       .meta,
-      .item .note,
       .photo figcaption {
         font-size: 14px;
       }
@@ -490,10 +1573,6 @@
       scroll-snap-type: x mandatory;
       margin: 12px 0 4px;
       padding-bottom: 6px;
-    }
-
-    .item .gallery {
-      margin: 0 0 8px;
     }
 
     .gallery:focus-visible {
@@ -529,7 +1608,126 @@
       font-weight: 700;
     }
 
-    /* 건물 이름표: 반투명 둥근 네모 + 아래로 짧은 선 (클릭은 건물로 통과) */
+    /* 사진 크게 보기 (화면 안 창) */
+    #lightbox {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      max-width: none;
+      max-height: none;
+      margin: 0;
+      padding: 56px 12px 16px;
+      border: 0;
+      background: rgba(0, 0, 0, .92);
+      color: #fff;
+    }
+
+    #lightbox[open] {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #lightbox::backdrop {
+      background: rgba(0, 0, 0, .6);
+    }
+
+    /* 사진 무대: 이 안에서 확대·이동 (손가락 두 개로 벌리기, 마우스 휠, 두 번 누르기) */
+    #lightbox-stage {
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;      /* 브라우저 전체 확대 대신 사진만 확대 */
+      cursor: zoom-in;
+    }
+
+    #lightbox-stage.zoomed {
+      cursor: grab;
+    }
+
+    #lightbox-stage.dragging {
+      cursor: grabbing;
+    }
+
+    #lightbox-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 6px;
+      transform-origin: center center;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      #lightbox-img.ease {
+        transition: transform .18s ease;
+      }
+    }
+
+    /* 확대 버튼: 왼쪽 위 (닫기는 오른쪽 위) */
+    #lightbox-tools {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #lightbox-tools button {
+      min-width: 44px;
+      height: 44px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 22px;
+      background: #ffffff;
+      color: var(--ink);
+      font: 700 18px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    #lightbox-tools #lb-reset {
+      font-size: 13px;
+    }
+
+    #lightbox-zoom {
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      min-width: 44px;
+    }
+
+    #lightbox-cap {
+      margin: 0;
+      max-width: 720px;
+      font-size: 14px;
+      line-height: 1.5;
+      text-align: center;
+      white-space: pre-line;
+    }
+
+    #lightbox-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 44px;
+      height: 44px;
+      border: 0;
+      border-radius: 50%;
+      background: #ffffff;
+      color: var(--ink);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* 건물 이름표: 반투명 둥근 네모만 (꼬리 없음, 클릭은 건물로 통과) */
     .bld-label {
       display: flex;
       flex-direction: column;
@@ -549,13 +1747,6 @@
       white-space: nowrap;
     }
 
-    .bld-label::after {
-      content: '';
-      width: 1.5px;
-      height: 10px;
-      background: rgba(29, 38, 34, 0.55);
-    }
-
     @media (max-width: 700px) {
       .bld-label span {
         font-size: 11px;
@@ -565,7 +1756,8 @@
 
     /* 변경 소식 */
     .news .date {
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--muted);
       margin-right: 6px;
     }
@@ -576,10 +1768,1014 @@
       font-size: 13px;
       color: var(--focus);
     }
+
+    /* 가장 최근 소식 1건: 접지 않고 눈에 띄게 */
+    .news-latest {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--brand-light);
+      border-left: 4px solid var(--select);
+      line-height: 1.55;
+    }
+
+    .news-latest .label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--select);
+    }
+
+    /* ---------- PC: 길 찾기 카드는 상세 패널과 같은 너비, 글씨·칸은 작게 ----------
+       (휴대폰은 위의 큰 글씨 그대로. 범례가 --panel-w만큼 비키므로 너비를 맞춰야 겹치지 않음) */
+    @media (min-width: 701px) {
+      #route-view {
+        width: var(--panel-w);
+        padding: 22px 22px 16px;
+      }
+
+      .rv-icon {
+        width: 30px;
+        height: 30px;
+      }
+
+      #route-view h2 {
+        font-size: 23px;
+      }
+
+      .rv-info {
+        width: 36px;
+        height: 36px;
+        top: -8px;
+      }
+
+      .rv-info svg {
+        width: 26px;
+        height: 26px;
+      }
+
+      .rv-tip {
+        font-size: 13px;
+      }
+
+      .nav-form {
+        grid-template-columns: minmax(0, 1fr) 40px;
+        row-gap: 10px;
+        margin-top: 18px;
+      }
+
+      .nav-field {
+        min-height: 46px;
+        padding-left: 14px;
+        gap: 10px;
+        border-width: 1.5px;
+      }
+
+      .nav-field .pin {
+        width: 18px;
+        height: 24px;
+      }
+
+      .nf-label {
+        font-size: 16px;
+        padding-right: 12px;
+      }
+
+      .nav-field select {
+        height: 42px;
+        padding-right: 36px;
+        font-size: 15px;
+      }
+
+      .nav-field::after {
+        right: 15px;
+        width: 8px;
+        height: 8px;
+        margin-top: -6px;
+      }
+
+      #nav-swap {
+        width: 36px;
+        height: 44px;
+      }
+
+      #nav-swap svg {
+        width: 24px;
+        height: 30px;
+      }
+
+      .nav-form .check {
+        margin-top: 4px;
+        font-size: 14px;
+      }
+
+      .nav-form .check input {
+        width: 18px;
+        height: 18px;
+      }
+
+      .nav-clear {
+        font-size: 14px;
+      }
+
+      .nav-summary {
+        font-size: 24px;
+        margin-bottom: 15px;
+      }
+
+      .nav-caution summary {
+        font-size: 15px;
+        padding: 8px 40px 8px 16px;
+      }
+
+      .nav-caution ul {
+        font-size: 14px;
+        padding: 8px 16px 12px 34px;
+      }
+
+      .tl-end b {
+        font-size: 17px;
+      }
+
+      .tl-sub,
+      .tl-step {
+        font-size: 14px;
+      }
+
+      .tl-step {
+        min-height: 52px;
+        padding-left: 52px;
+      }
+
+      .tl-len {
+        font-size: 16px;
+        padding-right: 12px;
+      }
+
+      .chip {
+        padding: 1px 10px;
+        font-size: 12px;
+      }
+
+      .nav-pv {
+        padding: 18px 22px 22px;
+        border-radius: 22px;
+      }
+
+      .nav-pv h3 {
+        font-size: 17px;
+        margin-bottom: 12px;
+      }
+
+      .nav-pv-start {
+        padding: 12px 14px;
+        font-size: 15px;
+        margin-bottom: 14px;
+      }
+
+      .nav-pv-cap,
+      .nav-pv .pv-note {
+        font-size: 13px;
+      }
+
+      .nav-ref summary {
+        font-size: 14px;
+        padding: 8px 40px 8px 16px;
+      }
+
+      .nav-ref div {
+        font-size: 13px;
+        padding: 10px 16px 12px;
+      }
+
+      .nav-box {
+        font-size: 13px;
+      }
+    }
+
+    /* ==================== 접근성 지도 패널 ==================== */
+    /* 스크롤바: 얇고 옅게, 화살표 없이 (패널 위에 마우스를 올리면 조금 진해짐) */
+    #panel,
+    #route-view {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(37, 37, 37, .16) transparent;
+    }
+
+    #panel:hover,
+    #route-view:hover {
+      scrollbar-color: rgba(37, 37, 37, .32) transparent;
+    }
+
+    /* 건물 이름 아래 접근성 수준 배지 */
+    .bld-level {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      margin: 2px 0 14px;
+    }
+
+    .bld-level .meta {
+      font-size: 13px;
+    }
+
+    .chip.big {
+      padding: 3px 12px;
+      font-size: 14px;
+    }
+
+    /* 맨 위 건물 사진: 패널 너비에 맞춘 16:9 */
+    #panel-body > .photo img,
+    #panel-body > .gallery .photo img {
+      height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+    }
+
+    /* 접근성 정보 요약 (항목 | 정보) */
+    .acc-sum {
+      display: grid;
+      margin: 14px 0 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .acc-sum div {
+      display: grid;
+      grid-template-columns: 7.5em 1fr;
+      gap: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+    }
+
+    .acc-sum div + div {
+      border-top: 1px solid var(--line);
+    }
+
+    .acc-sum dt {
+      color: var(--muted);
+    }
+
+    .acc-sum dd {
+      margin: 0;
+      font-weight: 600;
+    }
+
+    /* 현장 확인: 연회색 작은 카드 */
+    .checked-card {
+      display: grid;
+      gap: 2px;
+      margin: 12px 0 0;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: var(--wash);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .cc-note {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .route-cta {
+      margin-top: 14px;
+      padding: 13px 14px;
+      border-radius: 12px;
+      font-size: 15px;
+    }
+
+    .route-cta:hover,
+    .nav-pv-start:hover:not(:disabled) {
+      background: var(--brand-hover);
+    }
+
+    /* 입구·카페 마커로 연 시설: 패널 맨 위 카드 */
+    .top-entrance {
+      margin: 4px 0 14px;
+    }
+
+    /* 입구·시설 카드 목록 */
+    .fc-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .fcard {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+    }
+
+    .fcard[open] {
+      border-color: #cfd3d1;
+    }
+
+    .fcard.focus {
+      border: 2px solid var(--select);
+    }
+
+    /* 묶음 상자(이전 소식·입구·시설) 뚜껑: 기본 ▶ 표시 대신 오른쪽 꺾쇠 */
+    .section > summary {
+      list-style: none;
+      position: relative;
+      padding-right: 44px;
+    }
+
+    .section > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .section > summary::after {
+      content: '';
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      margin-top: -7px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(45deg);
+    }
+
+    .section[open] > summary::after {
+      transform: rotate(-135deg);
+      margin-top: -2px;
+    }
+
+    .summary {
+      font-size: 15px;
+    }
+
+    /* 카드 안 summary는 묶음 상자 뚜껑 모양을 물려받지 않게 */
+    .fcard summary {
+      margin: 0;
+      background: none;
+      border-radius: 12px;
+      font-size: inherit;
+      font-weight: 400;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 64px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+
+    .fcard summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .fcard summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 12px;
+    }
+
+    .fc-thumb {
+      position: relative;
+      width: 52px;
+      height: 52px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--wash);
+      color: var(--muted);
+    }
+
+    .fc-thumb svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .fc-thumb img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .fc-main {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .fc-tag {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--select);
+    }
+
+    .fc-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .fc-floor {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 0 6px;
+      border-radius: 6px;
+      background: var(--wash);
+      font-size: 12px;
+    }
+
+    .fc-line {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fc-chev {
+      width: 8px;
+      height: 8px;
+      flex: none;
+      margin: -4px 4px 0 2px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(45deg);
+    }
+
+    .fcard[open] .fc-chev {
+      transform: rotate(-135deg);
+      margin-top: 4px;
+    }
+
+    .fc-body {
+      padding: 0 12px 12px;
+    }
+
+    .fc-body .photo,
+    .fc-body .gallery {
+      margin: 0 0 10px;
+    }
+
+    .fc-body .photo img {
+      height: 220px;
+      object-fit: contain;
+    }
+
+    .kv {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .kv div {
+      display: grid;
+      grid-template-columns: 5.5em 1fr;
+      gap: 10px;
+    }
+
+    .kv dt {
+      color: var(--muted);
+    }
+
+    .kv dd {
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .kv-sub {
+      display: block;
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* 지도: 패널에서 펼친 입구·시설 자리 */
+    .fac-ring {
+      pointer-events: none;
+    }
+
+    /* 입구 외 시설(화장실 등 지도 마커가 없는 것): 작은 고리만, 움직임 없음 */
+    .fac-ring span {
+      display: block;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--select);
+      box-shadow: 0 0 0 2px #ffffff;
+    }
+
+    /* 선택한 카페 아이콘: 입구와 같은 흰 테두리 + 2px 버건디 (아이콘 크기·색은 그대로) */
+    .cafe-marker.is-selected {
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--select);
+    }
+
+    .cafe-ripple {
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid var(--select);
+      opacity: 0;
+      pointer-events: none;
+      animation: ent-ripple 700ms ease-out 1 forwards;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cafe-ripple {
+        display: none;
+      }
+    }
+
+    /* 입구를 고른 순간 한 번만 퍼지는 파동 */
+    .ent-ripple {
+      pointer-events: none;
+    }
+
+    .ent-ripple span {
+      display: block;
+      border-radius: 50%;
+      border: 2px solid var(--select);
+      opacity: 0;
+      animation: ent-ripple 700ms ease-out 1 forwards;
+    }
+
+    @keyframes ent-ripple {
+      from { transform: scale(1); opacity: .5; }
+      to { transform: scale(1.4); opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ent-ripple {
+        display: none;
+      }
+    }
+
+    /* 이전 소식·입구·시설 뚜껑 앞 아이콘 */
+    .section > summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sum-ico {
+      width: 20px;
+      height: 20px;
+      flex: none;
+      color: var(--select);
+    }
+
+    @media (max-width: 700px) {
+      .fcard summary {
+        min-height: 68px;
+      }
+
+      .fc-title {
+        font-size: 16px;
+      }
+    }
+
+    /* ==================== 목록 보기 (접근성 지도 탭 안) ==================== */
+    .view-switch {
+      position: fixed;
+      top: calc(var(--top-h) + 16px);
+      right: 16px;
+      z-index: 22;
+      display: flex;
+      gap: 4px;
+      padding: 5px;
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+    }
+
+    .view-switch button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 10px;
+      background: none;
+      color: var(--muted);
+      font: 500 15px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .view-switch button svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .view-switch button[aria-pressed="true"] {
+      background: var(--brand-light);
+      color: var(--select);
+      font-weight: 700;
+    }
+
+    body:not([data-tab="map"]) .view-switch {
+      display: none;
+    }
+
+    /* 목록 보기 중에는 지도용 패널·범례·상태 메시지를 숨김 (선택 상태는 그대로 남음) */
+    body[data-view="list"] #panel,
+    body[data-view="list"] #legend,
+    body[data-view="list"] #status {
+      visibility: hidden;
+    }
+
+    #list-view {
+      position: fixed;
+      top: var(--top-h);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 18;
+      overflow-y: auto;
+      background: #f7f8f7;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(37, 37, 37, .25) transparent;
+    }
+
+    .lv-wrap {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    .lv-head {
+      padding-right: 200px;   /* 오른쪽 위 지도/목록 버튼 자리 */
+    }
+
+    .lv-head h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    .lv-head h2:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+
+    .lv-counts {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0 0;
+      font-size: 14px;
+    }
+
+    .lv-counts .chip,
+    .lv-card .chip {
+      padding: 2px 10px;
+      font-size: 13px;
+    }
+
+    .lv-tools {
+      display: grid;
+      gap: 8px;
+      margin: 20px 0 8px;
+    }
+
+    .lv-label {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    #lv-search {
+      width: 100%;
+      min-height: 46px;
+      padding: 0 14px;
+      border: 1px solid #c9cecb;
+      border-radius: 10px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 400 16px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    }
+
+    #lv-search:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .lv-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .lv-filter button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 19px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 500 14px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .lv-filter button[aria-pressed="true"] {
+      border-color: var(--select);
+      background: var(--brand-light);
+      color: var(--select);
+      font-weight: 700;
+    }
+
+    .lv-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+    }
+
+    .lv-status {
+      margin: 12px 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .lv-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .lv-card {
+      scroll-margin-top: 16px;   /* 맨 위로 올 때 살짝 띄우기 */
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--paper);
+    }
+
+    .lv-card.is-selected {
+      border: 2px solid var(--select);
+    }
+
+    .lv-card-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+    }
+
+    .lv-card h3 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .lv-sel {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--select);
+    }
+
+    .lv-ent-count {
+      margin: 10px 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .lv-ents {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 4px;
+      font-size: 14px;
+    }
+
+    .lv-ents li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lv-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .lv-actions button,
+    .lv-ent-go {
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 10px;
+      font: 600 14px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .lv-more {
+      border: 1px solid #c9cecb;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .lv-go,
+    .lv-ent-go {
+      border: 0;
+      background: var(--select);
+      color: #ffffff;
+    }
+
+    .lv-go:hover,
+    .lv-ent-go:hover {
+      background: var(--brand-hover);
+    }
+
+    /* 화면이 좁아 오른쪽 위 지도/목록 버튼이 카드와 겹칠 수 있으면 그 아래로 */
+    @media (max-width: 1240px) {
+      .lv-card {
+        scroll-margin-top: 64px;
+      }
+    }
+
+    .lv-detail {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .lv-detail h4 {
+      margin: 16px 0 8px;
+      font-size: 15px;
+    }
+
+    .lv-detail h4:first-child {
+      margin-top: 0;
+    }
+
+    .lv-detail .kv div {
+      grid-template-columns: 7.5em 1fr;
+    }
+
+    .lv-sub {
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      border-radius: 10px;
+      background: var(--wash);
+    }
+
+    .lv-sub h5 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .lv-ent-go {
+      margin-top: 10px;
+      min-height: 36px;
+      font-size: 13px;
+    }
+
+    .lv-facs {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .lv-parking h3 {
+      margin: 28px 0 10px;
+      font-size: 18px;
+    }
+
+    @media (max-width: 700px) {
+      .view-switch {
+        top: calc(var(--top-h) + 8px);
+        right: 8px;
+      }
+
+      .view-switch button {
+        padding: 0 12px;
+      }
+
+      .lv-wrap {
+        padding: 70px 14px 40px;   /* 위의 지도/목록 버튼 아래부터 */
+      }
+
+      .lv-head {
+        padding-right: 0;
+      }
+
+      .lv-card {
+        padding: 16px;
+        scroll-margin-top: 64px;   /* 휴대폰: 위의 지도/목록 버튼 아래로 */
+      }
+    }
+
+    /* 출발·도착 건물 목록: 이름 사이 간격 넓히기
+       최신 크롬·엣지는 목록 창 모양까지 바꿀 수 있는 방식(base-select)을 쓰고,
+       그 밖의 브라우저는 줄 간격만 늘림 (휴대폰은 기기 기본 선택 창이라 원래 넉넉함) */
+    .nav-field select option {
+      padding: 8px 12px;
+    }
+
+    @supports (appearance: base-select) {
+      .nav-field select,
+      .nav-field select::picker(select) {
+        appearance: base-select;
+      }
+
+      .nav-field select::picker-icon {
+        display: none;   /* 꺾쇠는 칸 오른쪽에 따로 그려 둠 */
+      }
+
+      .nav-field select {
+        display: flex;
+        align-items: center;   /* 고른 건물 이름을 칸 가운데 높이에 */
+      }
+
+      .nav-field select::picker(select) {
+        margin-top: 6px;
+        padding: 6px;
+        max-height: min(380px, 60vh);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+      }
+
+      .nav-field select option {
+        padding: 11px 14px;
+        border-radius: 8px;
+        font-size: 15px;
+        line-height: 1.4;
+      }
+
+      .nav-field select option::checkmark {
+        display: none;
+      }
+
+      .nav-field select option:hover,
+      .nav-field select option:focus-visible {
+        background: var(--wash);
+      }
+
+      .nav-field select option:checked {
+        background: var(--brand-light);
+        color: var(--select);
+        font-weight: 600;
+      }
+    }
   </style>
 </head>
 
-<body>
+<body data-tab="map">
+  <!-- 맨 위 고정: 로고·제목 + 탭 -->
+  <div id="topbar">
+    <header id="header">
+      <a class="brand" href="./">
+        <!-- 로고는 CONFIG.logo 파일이 있을 때만 보임 -->
+        <img id="brand-logo" alt="덕성여자대학교" hidden />
+        <span class="brand-text">
+          <b>배리어프리 캠퍼스 맵</b>
+          <small>덕성여자대학교 장애학생지원센터</small>
+        </span>
+      </a>
+    </header>
+    <nav id="tabs" role="tablist" aria-label="보기 선택">
+      <button class="tab" role="tab" data-tab="map" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
+          <path d="M9 3v15M15 6v15" />
+        </svg>접근성 지도</button>
+      <button class="tab" role="tab" data-tab="route" aria-selected="false" aria-controls="route-view" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <circle cx="6" cy="19" r="2.5" />
+          <circle cx="18" cy="5" r="2.5" />
+          <path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5" />
+        </svg>길찾기</button>
+      <button class="tab" role="tab" data-tab="detail" aria-selected="false" aria-controls="detail-view" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2l9 5v10l-9 5-9-5V7z" />
+          <path d="M3 7l9 5 9-5M12 12v10" />
+        </svg>상세 캠퍼스</button>
+    </nav>
+  </div>
+
   <div id="map"></div>
   <div id="status"></div>
 
@@ -587,16 +2783,114 @@
     <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">접근성 수준 <span
         aria-hidden="true">▾</span></button>
     <div id="legend-body">
-      <ul id="legend-list"></ul>
-      <p>건물·길·입구(흰 점)를 누르면 상세 정보가 열려요.</p>
+      <div class="legend-row">
+        <ul id="legend-list"></ul>
+        <ul id="legend-extra"></ul>
+      </div>
+      <p>건물·길·입구(점)를 같은 색으로 나타내요. 누르면 상세 정보가 열려요.</p>
     </div>
   </aside>
 
-  <aside id="panel" aria-label="상세 정보" aria-hidden="true">
+  <!-- 닫혀 있을 때는 inert: Tab으로 안쪽 버튼에 들어가지 않게 -->
+  <aside id="panel" aria-label="상세 정보" aria-hidden="true" inert>
     <button id="panel-collapse" aria-label="상세 정보 접기" aria-expanded="true"><span aria-hidden="true">⌃</span></button>
     <button id="panel-close" aria-label="상세 정보 닫기">✕</button>
     <div id="panel-body"></div>
   </aside>
+
+  <!-- 길찾기 탭 (시범 기능): 출발·도착 건물을 고르면 길 레이어를 따라 경로 안내 -->
+  <aside id="route-view" role="tabpanel" aria-label="길 찾기" hidden>
+    <div class="rv-head">
+      <svg class="rv-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
+        <circle cx="7" cy="30" r="4.5" />
+        <circle cx="33" cy="8" r="4.5" />
+        <path d="M11.5 30H22a5.5 5.5 0 0 0 0-11h-6a5.5 5.5 0 0 1 0-11h12.5" />
+      </svg>
+      <h2>길 찾기</h2>
+      <button id="nav-info-btn" class="rv-info" type="button" aria-label="길 찾기 안내 보기" aria-expanded="false" aria-controls="nav-info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 11v6" />
+          <circle cx="12" cy="7.5" r=".6" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+    <p id="nav-info" class="rv-tip" hidden>휠체어로 갈 수 있는 길과 입구를 기준으로 안내해요.<br>지도에서 건물을 눌러 고를 수도 있어요.<br>시범 기능이라 일부 길만 현장 확인됐어요.</p>
+    <div class="nav-form">
+      <label class="nav-field">
+        <svg class="pin" viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1C6 1 1.5 5.5 1.5 11.3 1.5 19 12 31 12 31s10.5-12 10.5-19.7C22.5 5.5 18 1 12 1z" fill="var(--select)" /><circle cx="12" cy="11" r="4.6" fill="#fff" /></svg>
+        <span class="nf-label">출발</span>
+        <select id="nav-from" disabled><option value="">불러오는 중…</option></select>
+      </label>
+      <label class="nav-field">
+        <svg class="pin" viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1C6 1 1.5 5.5 1.5 11.3 1.5 19 12 31 12 31s10.5-12 10.5-19.7C22.5 5.5 18 1 12 1z" fill="var(--goal)" /><circle cx="12" cy="11" r="4.6" fill="#fff" /></svg>
+        <span class="nf-label">도착</span>
+        <select id="nav-to" disabled><option value="">불러오는 중…</option></select>
+      </label>
+      <button id="nav-swap" type="button" aria-label="출발과 도착 바꾸기" disabled>
+        <svg viewBox="0 0 40 46" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M13 42V4M5 12l8-8 8 8" />
+          <path d="M27 4v38M19 34l8 8 8-8" />
+        </svg>
+      </button>
+      <label class="check"><input type="checkbox" id="nav-assist" disabled /> 도움받아 이동 (어려움 구간도 포함)</label>
+      <button id="nav-clear" type="button" class="nav-clear" disabled>다시 고르기</button>
+    </div>
+    <div id="nav-result" aria-live="polite"></div>
+  </aside>
+
+  <!-- 접근성 지도 탭: 지도 보기 ↔ 목록 보기 전환 (지도 영역 오른쪽 위) -->
+  <div id="view-switch" class="view-switch" role="group" aria-label="보기 방식 선택">
+    <button type="button" data-view="map" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" /><path d="M9 3v15M15 6v15" /></svg>지도
+    </button>
+    <button type="button" data-view="list" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1" fill="currentColor" /><circle cx="4.5" cy="12" r="1" fill="currentColor" /><circle cx="4.5" cy="18" r="1" fill="currentColor" /></svg>목록
+    </button>
+  </div>
+
+  <!-- 목록 보기: 지도와 같은 시트·GeoJSON 데이터로 만든 텍스트 목록 (화면 읽기 프로그램·키보드용) -->
+  <section id="list-view" aria-labelledby="list-title" hidden>
+    <div class="lv-wrap">
+      <header class="lv-head">
+        <h2 id="list-title" tabindex="-1">캠퍼스 접근성 목록</h2>
+        <p class="meta">건물별 접근성 현황과 주요 출입구 정보를 확인할 수 있습니다.</p>
+        <p id="lv-counts" class="lv-counts"></p>
+      </header>
+      <div class="lv-tools">
+        <label for="lv-search" class="lv-label">건물 이름 검색</label>
+        <input id="lv-search" type="search" placeholder="예: 차미리사기념관" autocomplete="off" />
+        <div id="lv-filter" class="lv-filter" role="group" aria-label="접근성 수준으로 거르기"></div>
+      </div>
+      <p id="lv-status" class="lv-status" role="status" aria-live="polite"></p>
+      <ul id="lv-list" class="lv-list"></ul>
+      <section id="lv-parking" class="lv-parking" aria-labelledby="lv-parking-title" hidden></section>
+    </div>
+  </section>
+
+  <!-- 상세 캠퍼스 탭: 3D 모델을 넣기 전까지 안내만 (CONFIG.tabs.detail로 켜고 끔) -->
+  <section id="detail-view" role="tabpanel" aria-label="상세 캠퍼스" hidden>
+    <div>
+      <h2>상세 캠퍼스</h2>
+      <p>건물 외형을 입체로 살펴보는 참고용 3D 모델이에요.<br>접근성 정보는 '접근성 지도' 탭에서 확인해 주세요.</p>
+      <p class="meta">외형 참고용 · 모델 제작 2026-11 · 준비 중</p>
+    </div>
+  </section>
+
+  <!-- 사진 크게 보기: 화면 안 창 (Esc, 닫기 버튼, 바깥 누르기로 닫힘) -->
+  <dialog id="lightbox" aria-label="사진 크게 보기">
+    <div id="lightbox-tools">
+      <button id="lb-out" type="button" aria-label="사진 축소">−</button>
+      <button id="lb-in" type="button" aria-label="사진 확대">+</button>
+      <button id="lb-reset" type="button" aria-label="원래 크기로">원래 크기</button>
+      <span id="lightbox-zoom" aria-live="polite">100%</span>
+    </div>
+    <button id="lightbox-close" aria-label="사진 닫기">✕</button>
+    <div id="lightbox-stage">
+      <img id="lightbox-img" alt="" draggable="false" />
+    </div>
+    <p id="lightbox-cap"></p>
+  </dialog>
 
   <script>
     // ==================== CONFIG: 시트 주소는 여기 한 곳에서만 관리 ====================
@@ -609,9 +2903,48 @@
       geojson: 'data/buildings.geojson',
       routesGeojson: 'data/routes.geojson', // 길 모양(선). 각 선의 속성 route_id가 시트 routes 탭과 같아야 함
       photoDir: 'photos/', // 사진 파일을 넣는 폴더 (시트 file 열에는 파일 이름만)
+      // 왼쪽 위 로고 이미지. 비워 두거나 파일이 없으면 글자 제목만 보임
+      // 바탕이 버건디라 흰색 로고(배경 투명 PNG·SVG) 권장, 화면 높이 38px이니 원본은 세로 80px 이상
+      logo: 'icons/duksung-logo.png',
+      // 로고 파일이 흰 바탕이면 true: 흰 둥근 판 위에 올려 버건디 머리줄에서도 어색하지 않게
+      // (홍보실에서 버건디 바탕용·투명 배경 로고를 받으면 false로)
+      logoOnWhite: true,
+      // 탭 켜고 끄기: 아직 완성 안 된 탭은 false로 두고 Push (false면 탭 버튼 자체가 사라짐)
+      tabs: { route: true, detail: false },
+      // 길찾기(시범 기능) 기준. 바꾸면 보고서 기준표 설명도 함께 고칠 것
+      nav: {
+        // 길 수준별 부담: 숫자가 클수록 돌아가더라도 피함. 목록에 없는 수준은 아예 지나가지 않음
+        // (경로에 들어간 일부 제약·정보 없음·어려움 구간은 결과에 경고로 표시)
+        profiles: {
+          wheelchair: { '원활': 1, '일부 제약': 2, '정보 없음': 3 },                // 혼자 이동: 어려움 제외
+          assisted: { '원활': 1, '일부 제약': 1.3, '정보 없음': 1.5, '어려움': 2 }   // 도움받아 이동
+        },
+        // 입구 부담(m): 같은 건물에 입구가 여럿이면 원활한 입구를 먼저 고름. '어려움' 입구는 항상 안내에서 뺌
+        entranceCost: { '원활': 0, '일부 제약': 30, '정보 없음': 30 },
+        snapM: 1,           // 길 끝이 다른 길에 이만큼(m) 안으로 닿아 있으면 이어진 것으로 봄 (그림 오차)
+        entranceMaxM: 30,   // 입구에서 길까지 이보다 멀면 그 입구는 쓰지 않음 (m)
+        bypassSlackM: 10,   // 가장 가까운 길보다 이만큼 넘게 먼 길로는 입구를 잇지 않음 (어려움 길 건너뛰기 방지)
+        speed: 0.8,         // 예상 시간 계산용 휠체어 속도 (m/초)
+        defaultFrom: 'main_admin',   // 건물 패널에서 길찾기를 열 때 기본 출발
+        previewEveryM: 25,  // 거리뷰 미리 보기 지점 간격 (m)
+        previewMaxM: 25     // 지점에서 이보다 먼 거리뷰 사진은 보여 주지 않음 (옆 길·건물 너머 사진 방지)
+      },
+      // 네이버 클라우드 Maps(Dynamic Map)의 Client ID. 공개되는 값이라 숨길 수 없고,
+      // 콘솔의 Web 서비스 URL에 등록한 주소에서만 동작하게 막는 방식으로 보호함
+      // Client Secret은 어디에도 넣지 말 것. 센터로 이관하면 센터 계정에서 새로 받아 바꿔 넣기
+      naverKeyId: '7nn8y95c1l',
+      centerContact: '',            // 경로가 없을 때 함께 보여 줄 센터 연락처 (예: '02-000-0000'). 비우면 안 보임
+      // 카페 마크 이미지 (예: 'icons/cafe.png'). 비워 두면 기본 컵 그림 동그라미를 씀
+      // 배경이 투명한 PNG나 SVG 권장, 화면에는 36px로 보이니 원본은 96px 이상
+      cafeIcon: 'icons/cafe-badge-192.png',
+      // 입구 점과 겹치는 카페만 위로 올리기: { 시트 facility_id: 올릴 높이(px) }. 올린 카페는 아래로 짧은 선이 이어짐
+      // 예) cafeLift: { 'C01': 26 }
+      cafeLift: { 'C01': 10, 'C02': 20 },
       recentDays: 90,   // 최종 확인일이 이 기간 안이면 '최근 확인' 배지 (한 학기+방학 기준)
-      keepStatus: false, // 개발 중: 상태 메시지 계속 표시 (서비스 오픈 때 false로)
-      highlight: '#991e66', // 선택한 건물의 빛 색 (덕성여대 색상)
+      keepStatus: false, // true면 상태 메시지 계속 표시 + 지도 누르면 좌표 복사 (점검용, 평소엔 false)
+      // 좌표 따기는 keepStatus를 바꾸지 않아도 주소 뒤에 ?pick 을 붙이면 켜짐
+      // 예) https://hyelynkim21.github.io/duksung-barrierfree-map/?pick  (센터에서 입구·카페 좌표를 찍을 때도 이 주소 사용)
+      highlight: '#b70050', // 선택한 건물의 빛 색 (덕성여대 버건디, 머리줄 --brand와 같은 색)
       // 지형(땅 높낮이) 표시. 작은 화면에서 지형 조각과 건물이 겹쳐 건물 일부가 깜빡이는 문제가 있어 꺼 둠
       // (true로 바꾸면 다시 켜짐. 향후 고해상도 지형 자료를 쓸 때를 위해 코드는 남겨 둠)
       terrain: false,
@@ -621,10 +2954,10 @@
 
     // 접근성 수준별 색상과 설명 (시트 lists 탭의 값과 글자가 정확히 같아야 함)
     const LEVELS = {
-      '원활': { color: '#2e9e5b', desc: '휠체어 진입 입구·엘리베이터·장애인 화장실 모두 있음' },
-      '일부 제약': { color: '#f2a33a', desc: '일부 시설이 없거나 이용 조건이 있음' },
-      '어려움': { color: '#d64545', desc: '휠체어로 진입할 수 있는 입구가 없음' },
-      '정보 없음': { color: '#b0b0b0', desc: '판정할 자료가 없음' }
+      '원활': { color: '#299c62', desc: '휠체어 진입 입구·엘리베이터·장애인 화장실 모두 있음' },
+      '일부 제약': { color: '#f3a33b', desc: '일부 시설이 없거나 이용 조건이 있음' },
+      '어려움': { color: '#d94747', desc: '휠체어로 진입할 수 있는 입구가 없음' },
+      '정보 없음': { color: '#a8a8a8', desc: '판정할 자료가 없음' }
     };
 
     // 길에서의 접근성 수준 뜻 (색은 건물과 같은 LEVELS 색을 씀)
@@ -635,8 +2968,16 @@
       '정보 없음': '현장에서 확인하지 않음'
     };
 
+    // 입구에서의 접근성 수준 뜻 (시트 facilities의 access_level 열, 입구 행에만. 색은 LEVELS 색)
+    const ENTRANCE_DESC = {
+      '원활': '휠체어로 혼자 들어갈 수 있음 (경사로 또는 턱 없음, 자동문)',
+      '일부 제약': '들어갈 수 있지만 도움이나 주의가 필요함 (일반문, 좁은 경사로 등)',
+      '어려움': '휠체어로 들어갈 수 없음 (계단만 있음 등)',
+      '정보 없음': '현장에서 확인하지 않음'
+    };
+
     // 패널에 시설을 보여 줄 순서 (목록에 없는 새 종류는 맨 뒤에 자동으로 붙음)
-    const TYPE_ORDER = ['입구', '화장실', '엘리베이터', '경사로', '자동문', '주차', '편의시설'];
+    const TYPE_ORDER = ['입구', '화장실', '엘리베이터', '경사로', '자동문', '주차', '편의시설', '카페'];
     const TYPE_TITLES = { '입구': '입구', '화장실': '장애인 화장실' };
     // =================================================================================
 
@@ -644,14 +2985,25 @@
     // 선택 색은 CONFIG.highlight 한 곳에서 관리: CSS 변수 --select에도 같은 색을 넣어 줌
     document.documentElement.style.setProperty('--select', CONFIG.highlight);
     const isMobile = () => window.innerWidth <= 700;
+    // 좌표 따기 모드: keepStatus가 true이거나, 주소에 ?pick 이 있을 때
+    const PICK = CONFIG.keepStatus || new URLSearchParams(location.search).has('pick');
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // ---------- 로고 ----------
+    // 파일을 불러오는 데 성공했을 때만 보이게 (파일이 없어도 깨진 그림이 안 뜸)
+    if (CONFIG.logo) {
+      const logo = $('brand-logo');
+      logo.onload = () => { logo.hidden = false; };
+      if (CONFIG.logoOnWhite) logo.classList.add('on-white');
+      logo.src = CONFIG.logo;
+    }
 
     function showStatus(msg, isError) {
       const box = $('status');
       box.textContent = msg;
       box.className = isError ? 'error' : '';
       (isError ? console.error : console.log)(msg);
-      if (!isError && (!CONFIG.keepStatus || isMobile())) setTimeout(() => box.classList.add('hidden'), 3000);
+      if (!isError && !PICK) setTimeout(() => box.classList.add('hidden'), 3000);   // 좌표 따기 모드에선 계속 보이게
     }
 
     function loadCsv(url) {
@@ -688,13 +3040,17 @@
       $('legend-toggle').setAttribute('aria-expanded', String(open));
     }
     $('legend-toggle').addEventListener('click', () => setLegend($('legend').classList.contains('collapsed')));
+    // 범례 높이(펼침·접힘에 따라 바뀜)를 --legend-h에 넣어, PC 패널들이 범례 바로 위에서 끝나게 함
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--legend-h', $('legend').offsetHeight + 'px');
+    }).observe($('legend'));
     setLegend(!isMobile());
 
     // ---------- 사진 ----------
     // 시트 file 열: 파일 이름만 쓰면 photoDir 폴더에서, http로 시작하면 그 주소에서 불러옴
     const photoSrc = file => /^https?:\/\//.test(file) ? file : CONFIG.photoDir + file;
     // 같은 facility_id에 사진이 여러 장이면 step 순서로 옆으로 넘겨 보는 갤러리가 됨
-    // 사진을 누르면 새 창에서 사진만 열림 (휴대폰은 두 손가락, PC는 클릭·Ctrl+휠로 확대)
+    // 사진을 누르면 화면 안 창에서 크게 보임 (창을 지원하지 않는 옛 브라우저는 새 창으로 열림)
     function photoHtml(list) {
       const items = (list || [])
         .filter(p => p.file)
@@ -709,7 +3065,7 @@
         return `<figure class="photo">
           ${many ? `<span class="step">${i + 1} / ${items.length}</span>` : ''}
           <a class="photo-link" href="${src}" target="_blank" rel="noopener"
-            aria-label="${esc((p.caption || '사진') + ' 크게 보기 (새 창)')}">
+            aria-label="${esc((p.caption || '사진') + ' 크게 보기')}">
             <img src="${src}" alt="${esc(p.caption || '시설 사진')}" loading="lazy"
               onerror="this.closest('figure').remove()">
           </a>
@@ -721,77 +3077,272 @@
         : figs;
     }
 
+    const lightbox = $('lightbox');
+    // 건물 패널의 '이 건물로 안내하기' 버튼
+    $('panel-body').addEventListener('click', e => {
+      const b = e.target.closest('[data-route-to]');
+      if (b && navOpenTo) navOpenTo(b.dataset.routeTo);
+    });
+    // 사진 크게 보기 창
+    $('panel-body').addEventListener('click', e => {
+      const a = e.target.closest('.photo-link');
+      if (!a || typeof lightbox.showModal !== 'function') return;   // 창을 못 쓰는 브라우저는 새 창으로
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;   // Ctrl+클릭 등은 새 창 그대로
+      e.preventDefault();
+      const img = a.querySelector('img');
+      const cap = a.closest('figure') && a.closest('figure').querySelector('figcaption');
+      $('lightbox-img').src = a.href;
+      $('lightbox-img').alt = img ? img.alt : '';
+      $('lightbox-cap').textContent = cap ? cap.innerText.trim() : '';
+      zoomReset(false);
+      lightbox.showModal();
+      $('lightbox-close').focus();
+    });
+    $('lightbox-close').addEventListener('click', () => lightbox.close());
+    // 사진 바깥의 어두운 곳을 누르면 닫힘
+    lightbox.addEventListener('click', e => { if (e.target === lightbox) lightbox.close(); });
+    lightbox.addEventListener('close', () => { $('lightbox-img').removeAttribute('src'); zoomReset(false); });
+
+    // ---------- 사진 확대·이동 ----------
+    // 마우스 휠, 손가락 두 개 벌리기, 두 번 누르기(2.5배 ↔ 원래), +/− 버튼, 키보드 + − 0 화살표
+    const stage = $('lightbox-stage'), lbImg = $('lightbox-img');
+    const ZMIN = 1, ZMAX = 4;
+    let zs = 1, zx = 0, zy = 0;   // 배율, 가로·세로 이동(px)
+    function zoomApply(ease) {
+      // 사진이 화면 밖으로 너무 나가지 않게 이동 범위 제한
+      const mx = Math.max(0, (lbImg.offsetWidth * zs - stage.clientWidth) / 2);
+      const my = Math.max(0, (lbImg.offsetHeight * zs - stage.clientHeight) / 2);
+      zx = Math.min(mx, Math.max(-mx, zx));
+      zy = Math.min(my, Math.max(-my, zy));
+      lbImg.classList.toggle('ease', !!ease);
+      lbImg.style.transform = `translate(${zx}px, ${zy}px) scale(${zs})`;
+      stage.classList.toggle('zoomed', zs > 1);
+      $('lightbox-zoom').textContent = Math.round(zs * 100) + '%';
+    }
+    // (cx, cy): 화면에서 확대의 중심이 될 지점. 그 지점이 손가락·마우스 밑에 그대로 남도록 이동값을 맞춤
+    function zoomTo(ns, cx, cy, ease) {
+      ns = Math.min(ZMAX, Math.max(ZMIN, ns));
+      const r = stage.getBoundingClientRect();
+      const px = (cx ?? r.left + r.width / 2) - (r.left + r.width / 2);
+      const py = (cy ?? r.top + r.height / 2) - (r.top + r.height / 2);
+      zx = px - (px - zx) * (ns / zs);
+      zy = py - (py - zy) * (ns / zs);
+      zs = ns;
+      if (zs === 1) { zx = 0; zy = 0; }
+      zoomApply(ease);
+    }
+    function zoomReset(ease) { zs = 1; zx = 0; zy = 0; zoomApply(ease); }
+
+    $('lb-in').addEventListener('click', () => zoomTo(zs * 1.5, null, null, true));
+    $('lb-out').addEventListener('click', () => zoomTo(zs / 1.5, null, null, true));
+    $('lb-reset').addEventListener('click', () => zoomReset(true));
+
+    stage.addEventListener('wheel', e => {
+      e.preventDefault();
+      zoomTo(zs * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY, false);
+    }, { passive: false });
+
+    // 손가락·마우스 누르기 (여러 손가락을 함께 추적)
+    const pts = new Map();
+    let pinch = null, lastTap = null, down = null;
+    stage.addEventListener('pointerdown', e => {
+      stage.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      down = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false };
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: zs };
+      }
+      if (zs > 1) stage.classList.add('dragging');
+    });
+    stage.addEventListener('pointermove', e => {
+      const p = pts.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) down.moved = true;
+      if (pts.size === 2 && pinch) {
+        // 두 손가락: 벌린 만큼 확대, 두 손가락 가운데를 중심으로
+        const [a, b] = [...pts.values()];
+        zoomTo(pinch.s * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, (a.x + b.x) / 2, (a.y + b.y) / 2, false);
+      } else if (pts.size === 1 && zs > 1) {
+        // 한 손가락·마우스: 확대된 사진 옮기기
+        zx += dx; zy += dy;
+        zoomApply(false);
+      }
+    });
+    function pointerEnd(e) {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      if (!pts.size) stage.classList.remove('dragging');
+      // 두 번 누르기: 원래 크기 ↔ 2.5배
+      if (e.type === 'pointerup' && down && !down.moved && performance.now() - down.t < 300 && !pts.size) {
+        const now = performance.now();
+        if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+          if (zs > 1) zoomReset(true); else zoomTo(2.5, e.clientX, e.clientY, true);
+          lastTap = null;
+        } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
+      if (!pts.size) down = null;
+    }
+    stage.addEventListener('pointerup', pointerEnd);
+    stage.addEventListener('pointercancel', pointerEnd);
+
+    // 키보드: + 확대, − 축소, 0 원래 크기, 화살표로 이동 (사진 창이 열려 있을 때만)
+    lightbox.addEventListener('keydown', e => {
+      if (e.key === '+' || e.key === '=') { zoomTo(zs * 1.5, null, null, true); e.preventDefault(); }
+      else if (e.key === '-' || e.key === '_') { zoomTo(zs / 1.5, null, null, true); e.preventDefault(); }
+      else if (e.key === '0') { zoomReset(true); e.preventDefault(); }
+      else if (zs > 1 && e.key.startsWith('Arrow')) {
+        const step = 60;
+        if (e.key === 'ArrowLeft') zx += step;
+        if (e.key === 'ArrowRight') zx -= step;
+        if (e.key === 'ArrowUp') zy += step;
+        if (e.key === 'ArrowDown') zy -= step;
+        zoomApply(true); e.preventDefault();
+      }
+    });
+    window.addEventListener('resize', () => { if (lightbox.open) zoomApply(false); });
+
+    // 컵 그림 (카페 마커·범례에 함께 씀)
+    const CUP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3v3M12 3v3"/></svg>';
+    // 카페 마크: CONFIG.cafeIcon 이미지가 있으면 그 이미지, 없으면 컵 그림 (alt는 비움: 버튼 이름이 따로 있음)
+    const cafeMarkHtml = () => CONFIG.cafeIcon ? `<img src="${esc(CONFIG.cafeIcon)}" alt="">` : CUP_SVG;
+    $('legend-extra').innerHTML = `<li><span class="legend-cafe${CONFIG.cafeIcon ? ' has-img' : ''}">${cafeMarkHtml()}</span><span>카페</span></li>`;
+
     // ---------- 상세 패널 ----------
+    // 접근성 수준 꼬리표 (건물·입구·길 공통, 길찾기 타임라인과 같은 모양)
+    const LV_CLASS = { '원활': 'lv-ok', '일부 제약': 'lv-part', '어려움': 'lv-hard', '정보 없음': 'lv-none' };
+    const lvChip = (lv, big) => `<span class="chip ${LV_CLASS[lv] || 'lv-none'}${big ? ' big' : ''}">${esc(lv)}</span>`;
+    const DOOR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"/><path d="M3 21h18"/><circle cx="15" cy="12" r="1"/></svg>';
+    const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
+
+    // 시설 카드 하나: 접힌 상태에서는 썸네일·이름·한 줄 설명·수준, 펼치면 사진과 상세 항목
+    // (같은 패널 안에서는 한 번에 하나만 펼쳐짐. 펼치면 지도에서 그 위치를 강조)
+    // 시트에 있는 값만 보여 주고, 없는 항목은 줄 자체를 만들지 않음
+    function facCardHtml(f, photosByFac, opts = {}) {
+      const isEnt = f.type === '입구';
+      const lv = isEnt ? (LEVELS[f.access_level] ? f.access_level : '정보 없음') : null;
+      const photos = (photosByFac[f.facility_id] || []).filter(p => p.file)
+        .sort((a, b) => (Number(a.step) || 0) - (Number(b.step) || 0));
+      const thumb = photos.length
+        ? `<img src="${esc(photoSrc(photos[0].file))}" alt="" loading="lazy" onerror="this.remove()">`
+        : '';
+      const title = f.location_desc || TYPE_TITLES[f.type] || f.type || '시설';
+      const line = f.equipment || f.directions || (isEnt ? ENTRANCE_DESC[lv] : '');
+      const fc = parseDate(f.last_checked);
+      const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : '';
+      return `<details class="fcard${opts.focus ? ' focus' : ''}" name="fac-card" data-fid="${esc(f.facility_id)}"${opts.open ? ' open' : ''}>
+        <summary>
+          <span class="fc-thumb">${thumb}${isEnt ? DOOR_SVG : PIN_SVG}</span>
+          <span class="fc-main">
+            ${opts.focus ? `<span class="fc-tag">선택한 ${esc(TYPE_TITLES[f.type] || f.type || '시설')}</span>` : ''}
+            <span class="fc-title">${f.floor ? `<b class="fc-floor">${esc(f.floor)}</b>` : ''}${esc(title)}</span>
+            ${line ? `<span class="fc-line">${esc(line)}</span>` : ''}
+          </span>
+          ${lv ? lvChip(lv) : ''}
+          <span class="fc-chev" aria-hidden="true"></span>
+        </summary>
+        <div class="fc-body">
+          ${photoHtml(photos)}
+          <dl class="kv">
+            ${isEnt ? row('휠체어 출입', `${lvChip(lv)} <span class="kv-sub">${esc(ENTRANCE_DESC[lv])}</span>`) : ''}
+            ${row('가는 길', esc(f.directions))}
+            ${row('설비', esc(f.equipment))}
+            ${row('참고', esc(f.note))}
+            ${row('현장 확인', fc ? fmtDate(fc) : '')}
+          </dl>
+        </div>
+      </details>`;
+    }
+
+    // 소식 한 건의 내용 (맨 위 고정 소식과 이전 소식 목록에서 함께 씀)
+    function newsHtml(n) {
+      const d = parseDate(n.date);
+      return `${d ? `<span class="date">${fmtDate(d)}</span>` : ''}<b>${esc(n.title)}</b>
+        ${n.summary ? `<span class="equip">${esc(n.summary)}</span>` : ''}
+        ${/^https?:\/\//.test(n.link || '') ? `<a href="${esc(n.link)}" target="_blank" rel="noopener">공지 보기</a>` : ''}`;
+    }
+
+    // 현장 확인 카드 (연회색 작은 카드)
+    function checkedCard(dateStr, note) {
+      const d = parseDate(dateStr);
+      const recent = d && (Date.now() - d) / 86400000 <= CONFIG.recentDays;
+      return `<div class="checked-card checked">
+        <span>${d ? `최종 현장 확인 <b>${fmtDate(d)}</b>` : '현장 확인 기록 없음'}${recent ? '<span class="badge">최근 확인</span>' : ''}</span>
+        ${note ? `<span class="cc-note">${esc(note)}</span>` : ''}
+      </div>`;
+    }
+
     function openPanel(b, facs, news, bldPhotos, photosByFac, focusId) {
       const level = LEVELS[b.access_level] ? b.access_level : '정보 없음';
-      const checked = parseDate(b.last_checked);
-      const recent = checked && (Date.now() - checked) / 86400000 <= CONFIG.recentDays;
+      // 입구·카페 마커로 열었으면 그 시설을 패널 맨 위에 펼쳐서 보여 줌
+      const focusFac = focusId ? facs.find(f => f.facility_id === focusId) : null;
+
+      // 접근성 정보 요약: 시트 시설 목록에서 종류별 개수·층만 셈 (없는 정보는 만들지 않음)
+      const byType = {};
+      facs.forEach(f => { (byType[f.type || '기타'] ||= []).push(f); });
+      const sumTypes = Object.keys(byType).sort((a, c) =>
+        (TYPE_ORDER.indexOf(a) + 1 || 99) - (TYPE_ORDER.indexOf(c) + 1 || 99));
+      const sumRows = sumTypes.map(t => {
+        const list = byType[t];
+        let v;
+        if (t === '입구') {
+          const ok = list.filter(f => f.access_level === '원활').length;
+          v = `${list.length}곳${ok ? ` · 휠체어 원활 ${ok}곳` : ''}`;
+        } else {
+          const floors = [...new Set(list.map(f => f.floor).filter(Boolean))].sort((x, y) => floorRank(x) - floorRank(y));
+          v = `${floors.length ? floors.join('·') + ' · ' : ''}${list.length}곳`;
+        }
+        return `<div><dt>${esc(TYPE_TITLES[t] || t)}</dt><dd>${esc(v)}</dd></div>`;
+      }).join('');
 
       let html = `<h2>${esc(b.name || b.building_id)}</h2>
-        <div class="level"><span class="swatch" style="background:${LEVELS[level].color}"></span>${level}</div>
-        <p class="meta">${LEVELS[level].desc}</p>
+        <div class="bld-level">${lvChip(level, true)}<span class="meta">${LEVELS[level].desc}</span></div>
+        ${focusFac ? `<div class="top-entrance">${facCardHtml(focusFac, photosByFac, { open: true, focus: true })}</div>` : ''}
         ${photoHtml(bldPhotos)}
+        ${sumRows ? `<dl class="acc-sum" aria-label="접근성 정보 요약">${sumRows}</dl>` : ''}
         ${b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''}
-        <p class="meta checked">${checked ? `최종 현장 확인 ${fmtDate(checked)}` : '현장 확인 기록 없음'}${recent ? '<span class="badge">최근 확인</span>' : ''}</p>
-        ${b.note ? `<p class="meta">${esc(b.note)}</p>` : ''}`;
+        ${checkedCard(b.last_checked, b.note)}
+        ${CONFIG.tabs && CONFIG.tabs.route ? `<button type="button" class="route-cta" data-route-to="${esc(b.building_id)}">이 건물로 안내하기</button>` : ''}`;
 
-      // 변경 소식: 최신순
+      // 변경 소식: 가장 최근 1건은 펼쳐서 눈에 띄게, 나머지는 '이전 소식'으로 접기
       const sorted = (news || []).slice().sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
       if (sorted.length) {
-        html += `<details class="section"><summary>변경 소식 (${sorted.length})</summary>`;
-        sorted.forEach(n => {
-          const d = parseDate(n.date);
-          html += `<div class="item news">
-            ${d ? `<span class="date">${fmtDate(d)}</span>` : ''}<b>${esc(n.title)}</b>
-            ${n.summary ? `<span class="equip">${esc(n.summary)}</span>` : ''}
-            ${/^https?:\/\//.test(n.link || '') ? `<a href="${esc(n.link)}" target="_blank" rel="noopener">공지 보기</a>` : ''}
-          </div>`;
+        const [latest, ...older] = sorted;
+        html += `<div class="news-latest news"><span class="label">최근 변경 소식</span>${newsHtml(latest)}</div>`;
+        if (older.length) {
+          html += `<details class="section"><summary><svg class="sum-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>이전 소식 (${older.length})</summary>
+            ${older.map(n => `<div class="item news">${newsHtml(n)}</div>`).join('')}
+          </details>`;
+        }
+      }
+
+      // 입구·시설 목록 (맨 위에 보여 준 시설은 빼서 두 번 나오지 않게)
+      const listFacs = focusFac ? facs.filter(f => f !== focusFac) : facs;
+      const groups = {};
+      listFacs.forEach(f => { (groups[f.type || '기타'] ||= []).push(f); });
+      const types = Object.keys(groups).sort((a, c) =>
+        (TYPE_ORDER.indexOf(a) + 1 || 99) - (TYPE_ORDER.indexOf(c) + 1 || 99));
+      if (!types.length && !focusFac) html += `<div class="section"><p class="empty">등록된 시설 정보가 없어요.</p></div>`;
+
+      const sortFloor = rows => rows.sort((a, c) => floorRank(a.floor) - floorRank(c.floor));
+      if (groups['입구']) {
+        const rows = sortFloor(groups['입구']);
+        html += `<details class="section"><summary><svg class="sum-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21h16"/><path d="M6 21V4l9-1v18"/><path d="M15 5h3v16"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>${focusFac && focusFac.type === '입구' ? '다른 입구' : '입구'} (${rows.length})</summary>
+          <div class="fc-list">${rows.map(f => facCardHtml(f, photosByFac)).join('')}</div></details>`;
+      }
+      const facTypes = types.filter(t => t !== '입구');
+      if (facTypes.length) {
+        const facCount = facTypes.reduce((n, t) => n + groups[t].length, 0);
+        html += `<details class="section"><summary><svg class="sum-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="4" r="1.8"/><path d="M11 7v6h5l2 6"/><path d="M8 10a6 6 0 1 0 7.6 8.2"/></svg>시설 (${facCount})</summary>`;
+        facTypes.forEach(t => {
+          const rows = sortFloor(groups[t]);
+          html += `<h3 class="sub">${esc(TYPE_TITLES[t] || t)} (${rows.length})</h3>
+            <div class="fc-list">${rows.map(f => facCardHtml(f, photosByFac)).join('')}</div>`;
         });
         html += `</details>`;
       }
-
-      // 시설을 종류별로 묶기 (시트에 새 종류가 생겨도 자동으로 섹션이 생김)
-      const groups = {};
-      facs.forEach(f => { (groups[f.type || '기타'] ||= []).push(f); });
-      const types = Object.keys(groups).sort((a, b) =>
-        (TYPE_ORDER.indexOf(a) + 1 || 99) - (TYPE_ORDER.indexOf(b) + 1 || 99));
-
-      if (!types.length) html += `<div class="section"><p class="empty">등록된 시설 정보가 없어요.</p></div>`;
-
-      // 입구가 아닌 종류들 = '시설' 상자에 들어갈 것들
-      const facTypes = types.filter(t => t !== '입구');
-      // 시설 상자 뚜껑에 쓸 전체 개수
-      const facCount = facTypes.reduce((n, t) => n + groups[t].length, 0);
-
-      types.forEach(t => {
-        const rows = groups[t].sort((a, b) => floorRank(a.floor) - floorRank(b.floor));
-        // 입구 마커로 열었으면 누른 입구를 맨 앞으로 (나머지 입구는 원래 순서대로 아래에)
-        if (t === '입구' && focusId) rows.sort((a, b) => (b.facility_id === focusId) - (a.facility_id === focusId));
-
-        if (t === '입구') {
-          // 입구: 접힌 상자 (변경 소식·입구·시설이 목차처럼 한눈에 보이게). 입구 마커로 열었을 때만 펼침
-          html += `<details class="section"${focusId ? ' open' : ''}><summary>입구 (${rows.length})</summary>`;
-        } else {
-          // 시설 종류 중 첫 번째일 때만 '시설' 상자를 연다
-          if (t === facTypes[0]) html += `<details class="section"><summary>시설 (${facCount})</summary>`;
-          // 상자 안의 작은 제목
-          html += `<h3 class="sub">${esc(TYPE_TITLES[t] || t)} (${rows.length})</h3>`;
-        }
-        rows.forEach(f => {
-          const fc = parseDate(f.last_checked);
-          const focus = f.facility_id === focusId;   // 입구 마커로 누른 그 입구인지
-          html += `<div class="item${focus ? ' focus' : ''}">
-            ${focus ? '<span class="tag">선택한 입구</span>' : ''}
-            ${photoHtml(photosByFac[f.facility_id])}
-            ${f.floor ? `<span class="floor">${esc(f.floor)}</span>` : ''}${esc(f.location_desc || (f.floor ? '' : '위치 정보 없음'))}
-            ${f.equipment ? `<span class="equip">${esc(f.equipment)}</span>` : ''}
-            ${fc ? `<span class="note">현장 확인 ${fmtDate(fc)}</span>` : ''}
-            ${f.note ? `<span class="note">${esc(f.note)}</span>` : ''}
-          </div>`;
-        });
-        if (t === '입구') html += `</details>`;   // 입구 상자는 바로 닫기
-      });
-      if (facTypes.length) html += `</details>`;  // 시설 상자는 반복이 다 끝난 뒤에 닫기
 
       showPanelHtml(html);
     }
@@ -799,27 +3350,46 @@
     // 길 패널: 이름(없으면 '출발 – 도착'), 수준, 이유(issue), 확인일, 근거(note)
     function openRoutePanel(r) {
       const level = LEVELS[r.condition] ? r.condition : '정보 없음';
-      const checked = parseDate(r.last_checked);
-      const recent = checked && (Date.now() - checked) / 86400000 <= CONFIG.recentDays;
       showPanelHtml(`<h2>${esc(r.label)}</h2>
-        <div class="level"><span class="swatch" style="background:${LEVELS[level].color}"></span>${level}</div>
-        <p class="meta">${ROUTE_DESC[level]}</p>
+        <div class="bld-level">${lvChip(level, true)}<span class="meta">${ROUTE_DESC[level]}</span></div>
         ${r.issue ? `<p class="summary">${esc(r.issue)}</p>` : ''}
-        <p class="meta checked">${checked ? `최종 현장 확인 ${fmtDate(checked)}` : '현장 확인 기록 없음'}${recent ? '<span class="badge">최근 확인</span>' : ''}</p>
-        ${r.note ? `<p class="meta">${esc(r.note)}</p>` : ''}`);
+        ${checkedCard(r.last_checked, r.note)}`);
     }
+
+    // 입구·시설 카드: 한 번에 하나만 펼치고(옛 브라우저 대비), 펼친 시설은 지도에서 강조
+    let focusFacility = () => { }, unfocusFacility = () => { };   // 지도가 준비되면 실제 함수로 바뀜
+    $('panel-body').addEventListener('toggle', e => {
+      const card = e.target;
+      if (!card.classList || !card.classList.contains('fcard')) return;
+      if (card.open) {
+        $('panel-body').querySelectorAll('.fcard[open]').forEach(c => { if (c !== card) c.open = false; });
+        focusFacility(card.dataset.fid);
+      } else if (!$('panel-body').querySelector('.fcard[open]')) {
+        unfocusFacility();
+      }
+    }, true);   // toggle은 위로 전달되지 않아서 잡는 단계에서 받음
 
     // 건물·길 패널이 함께 쓰는 '패널 열기'
     function showPanelHtml(html) {
       $('panel-body').innerHTML = html;
       setCollapsed(false);   // 새로 열면 항상 펼친 상태로
       $('panel').scrollTop = 0;
+      $('panel').inert = false;   // 포커스를 옮기기 전에 먼저 풀어야 함
       $('panel').classList.add('open');
       document.body.classList.add('panel-open');
       $('panel').setAttribute('aria-hidden', 'false');
       $('panel-close').focus({ preventScroll: true });
     }
     let clearSelection = () => { };   // 지도가 준비되면 실제 함수로 바뀜
+    // 패널에서 펼친 입구·시설 자리를 지도에 표시하는 버건디 고리
+    const facRingEl = document.createElement('div');
+    facRingEl.className = 'fac-ring';
+    facRingEl.innerHTML = '<span></span>';   // 지도가 바깥 요소의 transform으로 위치를 잡으므로 움직임은 안쪽에만
+    facRingEl.setAttribute('aria-hidden', 'true');
+    const facRing = new maplibregl.Marker({ element: facRingEl });
+    let currentBld = null;   // 지금 패널에 열린 건물
+    let onTabChange = () => { };      // 길찾기가 준비되면 실제 함수로 바뀜 (경로 선 보이기·숨기기)
+    let navOpenTo = null;             // 길찾기가 준비되면 '이 건물까지 길찾기' 함수가 들어감
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     function closePanel() {
       // 포커스가 패널 안에 있을 때만 지도로 돌려줌
@@ -829,6 +3399,7 @@
       $('panel').classList.remove('open');
       document.body.classList.remove('panel-open');
       $('panel').setAttribute('aria-hidden', 'true');
+      $('panel').inert = true;   // 닫힌 패널 안 버튼에 Tab이 들어가지 않게
     }
     function setCollapsed(on) {
       $('panel').classList.toggle('collapsed', on);
@@ -837,7 +3408,93 @@
     }
     $('panel-collapse').addEventListener('click', () => setCollapsed(!$('panel').classList.contains('collapsed')));
     $('panel-close').addEventListener('click', closePanel);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (lightbox.open) return;   // 사진 창이 열려 있으면 Esc는 사진 창만 닫음
+      closePanel();
+    });
+
+    // ---------- 접근성 지도 탭: 지도 보기 ↔ 목록 보기 ----------
+    // 목록은 지도와 같은 데이터로 만들고(시트 + GeoJSON), 지도는 다시 만들지 않고 그 위를 덮기만 함
+    // → 목록에서 돌아오면 지도 위치·확대·선택 상태가 그대로 남아 있음
+    let currentView = 'map';
+    let renderList = null;   // 데이터가 준비되면 실제 함수가 들어감
+    function setView(v, opts = {}) {
+      if (v === currentView) return;
+      currentView = v;
+      document.body.dataset.view = v;
+      $('view-switch').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+      $('list-view').hidden = v !== 'list';
+      if (v === 'list') {
+        if (renderList) renderList(true);
+        else $('lv-status').textContent = '목록을 불러오는 중이에요…';
+        if (!opts.noFocus) $('list-title').focus({ preventScroll: true });
+      } else if (opts.focusSwitch) {
+        $('view-switch').querySelector('[data-view="map"]').focus();
+      }
+    }
+    $('view-switch').querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', () => setView(b.dataset.view, { focusSwitch: true })));
+    document.body.dataset.view = 'map';
+
+    // ---------- 탭: 접근성 지도 / 길찾기 / 상세 캠퍼스 ----------
+    let currentTab = 'map';
+    // CONFIG.tabs에서 false로 둔 탭은 버튼을 없앰
+    document.querySelectorAll('.tab').forEach(btn => {
+      const id = btn.dataset.tab;
+      if (id !== 'map' && !(CONFIG.tabs || {})[id]) btn.remove();
+    });
+    const tabButtons = () => [...document.querySelectorAll('.tab')];
+
+    function setTab(id) {
+      if (id === currentTab) return;
+      closePanel();   // 탭을 바꾸면 건물 패널은 닫음
+      currentTab = id;
+      document.body.dataset.tab = id;
+      tabButtons().forEach(b => {
+        const on = b.dataset.tab === id;
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      $('route-view').hidden = id !== 'route';
+      $('detail-view').hidden = id !== 'detail';
+      // 길찾기 카드도 패널처럼 왼쪽(모바일은 아래)을 차지하니 범례·상태 메시지를 비킴
+      document.body.classList.toggle('panel-open', id === 'route');
+      if (id !== 'map') setView('map', { noFocus: true });   // 다른 탭으로 가면 목록 보기는 닫음
+      if (id === 'map') map.resize();
+      onTabChange(id);
+    }
+    tabButtons().forEach(btn => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
+    // 출발·도착 칸: 핀·이름·빈 곳을 눌러도 건물 목록이 바로 열리게 (지원하지 않는 브라우저는 칸에 포커스만)
+    document.querySelectorAll('.nav-field').forEach(field => field.addEventListener('click', e => {
+      const sel = field.querySelector('select');
+      // 고르는 칸 자체나 목록 안 건물(option)을 누른 경우는 브라우저에 맡김 (목록이 다시 열리지 않게)
+      if (sel.contains(e.target) || sel.disabled) return;
+      e.preventDefault();
+      sel.focus();
+      try { sel.showPicker(); } catch (err) { /* showPicker 미지원 */ }
+    }));
+    // 길 찾기 카드의 (i): 안내 말풍선 열고 닫기
+    $('nav-info-btn').addEventListener('click', () => {
+      const tip = $('nav-info'), open = tip.hidden;
+      tip.hidden = !open;
+      $('nav-info-btn').setAttribute('aria-expanded', String(open));
+    });
+    // 키보드: 탭 위에서 ← → 로 옆 탭으로 이동 (Home·End는 처음·끝)
+    $('tabs').addEventListener('keydown', e => {
+      const list = tabButtons();
+      const i = list.indexOf(document.activeElement);
+      if (i < 0) return;
+      let next = null;
+      if (e.key === 'ArrowRight') next = list[(i + 1) % list.length];
+      else if (e.key === 'ArrowLeft') next = list[(i - 1 + list.length) % list.length];
+      else if (e.key === 'Home') next = list[0];
+      else if (e.key === 'End') next = list[list.length - 1];
+      if (!next) return;
+      e.preventDefault();
+      next.focus();
+      setTab(next.dataset.tab);
+    });
 
     // ---------- 지도 ----------
     const map = new maplibregl.Map({
@@ -846,7 +3503,57 @@
       center: [127.01716, 37.65142],
       zoom: isMobile() ? 15.6 : 17, pitch: 55, bearing: 75
     });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');   // 패널과 겹치지 않게 왼쪽 위
+    // 확대·축소 버튼: 오른쪽 아래 (왼쪽은 상세 패널 자리)
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+
+    // 2D(위에서 보기) ↔ 3D 전환 버튼: 확대·축소 버튼 바로 위
+    // (오른쪽 아래 버튼은 나중에 추가한 것이 위에 쌓임)
+    // 2D: 바로 위에서 북쪽이 위로 오게 보고, 기울이기를 잠금. 3D로 돌아오면 2D로 바꾸기 전 각도로 복귀
+    class ViewToggle {
+      onAdd(m) {
+        this.m = m;
+        this.prev = null;   // 2D로 바꾸기 전의 기울기·방향 (null이면 지금 3D)
+        this.box = document.createElement('div');
+        this.box.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+        this.btn = document.createElement('button');
+        this.btn.type = 'button';
+        this.btn.className = 'view-toggle';
+        this.label();
+        this.btn.addEventListener('click', () => { if (this.prev) this.to3D(); else this.to2D(); });
+        this.box.appendChild(this.btn);
+        return this.box;
+      }
+      label() {
+        this.btn.textContent = this.prev ? '3D' : '2D';   // 누르면 바뀔 모드를 보여 줌
+        this.btn.title = this.prev ? '입체로 보기 (3D)' : '위에서 보기 (2D)';
+        this.btn.setAttribute('aria-label', this.btn.title);
+      }
+      // moveBySelf가 false면 카메라 이동은 호출한 쪽(fitBounds 등, pitch 0으로)에 맡기고 잠금만 걺
+      to2D(moveBySelf = true) {
+        if (this.prev) return;
+        const m = this.m;
+        this.prev = { pitch: m.getPitch(), bearing: m.getBearing() };
+        if (moveBySelf) m.easeTo({ pitch: 0, bearing: 0, duration: reduceMotion ? 0 : 600 });
+        m.once('moveend', () => { if (this.prev) m.setMaxPitch(0); });   // 다 내려온 뒤 기울이기 잠금
+        this.label();
+      }
+      to3D() {
+        if (!this.prev) return;
+        const back = this.prev;
+        this.prev = null;
+        this.m.setMaxPitch(60);
+        this.m.easeTo({ pitch: back.pitch || 55, bearing: back.bearing, duration: reduceMotion ? 0 : 600 });
+        this.label();
+      }
+      onRemove() { this.box.remove(); }
+    }
+    const viewToggle = new ViewToggle();
+    map.addControl(viewToggle, 'bottom-right');
+
+    // 선택한 건물·길로 이동할 때 패널에 가리지 않게 비울 여백 (PC: 왼쪽 패널, 모바일: 아래 패널)
+    const panelPadding = () => isMobile()
+      ? { top: 0, right: 0, left: 0, bottom: window.innerHeight * 0.6 }
+      : { top: 0, right: 0, bottom: 0, left: $('panel').offsetWidth + 32 };
 
     map.on('load', async () => {
       // 0) 지형: 땅 높이 데이터(DEM)를 불러와 바닥을 솟아오르게 함
@@ -870,7 +3577,7 @@
         });
       }
 
-      // 1) 건물을 먼저 회색으로 그리기
+      // 1) 건물을 먼저 회색(정보 없음)으로 그리기
       let geo;
       try {
         const res = await fetch(CONFIG.geojson);
@@ -898,15 +3605,15 @@
       const NONE_ROUTE = ['==', ['get', 'route_id'], '__none__'];
       map.addLayer({   // 바깥으로 넓게 퍼지는 빛
         id: 'select-glow', source: 'campus-buildings', type: 'line', filter: NONE,
-        paint: { 'line-color': CONFIG.highlight, 'line-width': 26, 'line-blur': 16, 'line-opacity': 0.35 }
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 28, 'line-blur': 18, 'line-opacity': 0.22 }
       }, 'buildings-3d');
       map.addLayer({   // 건물에 붙은 진한 빛
         id: 'select-core', source: 'campus-buildings', type: 'line', filter: NONE,
-        paint: { 'line-color': CONFIG.highlight, 'line-width': 8, 'line-blur': 4, 'line-opacity': 0.45 }
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 7, 'line-blur': 4, 'line-opacity': 0.3 }
       }, 'buildings-3d');
       map.addLayer({   // 또렷한 테두리
         id: 'select-edge', source: 'campus-buildings', type: 'line', filter: NONE,
-        paint: { 'line-color': CONFIG.highlight, 'line-width': 2, 'line-opacity': 0.8 }
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 2, 'line-opacity': 0.85 }
       }, 'buildings-3d');
 
       // 빛이 천천히 숨 쉬듯 밝아졌다 어두워짐 (움직임 줄이기 설정이면 고정)
@@ -917,8 +3624,8 @@
         const t0 = performance.now();
         const tick = now => {
           const k = (Math.sin((now - t0) / 450) + 1) / 2;        // 0~1
-          map.setPaintProperty('select-glow', 'line-opacity', 0.2 + 0.25 * k);
-          map.setPaintProperty('select-glow', 'line-width', 22 + 8 * k);
+          map.setPaintProperty('select-glow', 'line-opacity', 0.14 + 0.14 * k);
+          map.setPaintProperty('select-glow', 'line-width', 24 + 8 * k);
           pulseId = requestAnimationFrame(tick);
         };
         pulseId = requestAnimationFrame(tick);
@@ -940,26 +3647,69 @@
 
       // 같은 building_id의 조각(예술관 3조각 등)을 모두 함께 선택
       function selectBuilding(id) {
+        currentBld = id;
         const f = ['==', ['get', 'building_id'], id];
         if (map.getLayer('route-select')) map.setFilter('route-select', NONE_ROUTE);   // 길 선택은 해제
         ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, f));
         startPulse();
 
-        // 건물 중심으로 부드럽게 이동 (패널에 가리지 않게 여백 확보)
+        // 건물 중심으로 부드럽게 이동 (왼쪽 패널에 가리지 않게 여백 확보)
         const c = centerOf(id);
         if (!c) return;   // 좌표를 못 찾으면 이동하지 않음
-        const mobile = window.innerWidth <= 700;
-        map.easeTo({
-          center: c,
-          padding: mobile ? { bottom: window.innerHeight * 0.6 } : { right: $('panel').offsetWidth + 16 },  // 패널 너비만큼 비켜서 가운데 정렬
-          duration: reduceMotion ? 0 : 700
-        });
+        map.easeTo({ center: c, padding: panelPadding(), duration: reduceMotion ? 0 : 700 });
       }
       clearSelection = () => {
         cancelAnimationFrame(pulseId);
+        currentBld = null;
+        facRing.remove();
+        markEntrance(null);
+        markCafe(null);
         ['select-glow', 'select-core', 'select-edge'].forEach(l => map.setFilter(l, NONE));
         if (map.getLayer('route-select')) map.setFilter('route-select', NONE_ROUTE);
+        setFocus(currentTab === 'route' ? navFocus : null);   // 길찾기 탭이면 경로의 출발·도착 강조는 남김
       };
+
+      // ---------- 선택 강조: 고른 건물·입구만 제 색, 나머지는 회색 쪽으로 흐리게 ----------
+      const DIM_TO = '#d6d9d7', DIM_K = 0.85;   // 흐리게 할 때 섞을 회색과 비율 (0이면 그대로, 1이면 완전 회색)
+      function mixHex(a, b, t) {
+        const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+        const A = p(a), B = p(b);
+        return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
+      }
+      // 접근성 수준 → 색 식 (dim이면 흐린 색)
+      const levelColor = (prop, dim) => {
+        const c = name => dim ? mixHex(LEVELS[name].color, DIM_TO, DIM_K) : LEVELS[name].color;
+        return ['match', ['get', prop], '원활', c('원활'), '일부 제약', c('일부 제약'), '어려움', c('어려움'), c('정보 없음')];
+      };
+      let navFocus = null;   // 길찾기 경로의 출발·도착 강조 (길찾기 탭에서만 씀)
+      // f: { buildings: [building_id…], entrances: [facility_id…], dimRoutes: true/false } 또는 null(모두 원래 색)
+      // entrances가 비어 있으면 고른 건물의 입구는 모두 제 색
+      // dimRoutes: 길찾기에서 경로(버건디 선)만 남기고 다른 길 색을 모두 흐리게
+      function setRoutesDim(on) {
+        if (!map.getLayer('routes-line')) return;
+        map.setPaintProperty('routes-line', 'line-color', levelColor('condition', on));
+        map.setPaintProperty('routes-casing', 'line-opacity', on ? 0.5 : 1);
+      }
+      function setFocus(f) {
+        setRoutesDim(!!(f && f.dimRoutes));
+        if (!f) {
+          map.setPaintProperty('buildings-3d', 'fill-extrusion-color', levelColor('access_level', false));
+          if (map.getLayer('entrance-dots')) {
+            map.setPaintProperty('entrance-dots', 'circle-color', levelColor('access_level', false));
+            map.setPaintProperty('entrance-dots', 'circle-stroke-opacity', 1);
+            map.setPaintProperty('entrance-halo', 'circle-opacity', 1);
+          }
+          return;
+        }
+        const inB = ['in', ['get', 'building_id'], ['literal', f.buildings || []]];
+        map.setPaintProperty('buildings-3d', 'fill-extrusion-color', ['case', inB, levelColor('access_level', false), levelColor('access_level', true)]);
+        if (map.getLayer('entrance-dots')) {
+          const inE = f.entrances && f.entrances.length ? ['in', ['get', 'facility_id'], ['literal', f.entrances]] : inB;
+          map.setPaintProperty('entrance-dots', 'circle-color', ['case', inE, levelColor('access_level', false), levelColor('access_level', true)]);
+          map.setPaintProperty('entrance-dots', 'circle-stroke-opacity', ['case', inE, 1, 0.35]);
+          map.setPaintProperty('entrance-halo', 'circle-opacity', ['case', inE, 1, 0.6]);
+        }
+      }
 
       showStatus('건물 ' + geo.features.length + '개 표시, 시트 불러오는 중…');
 
@@ -1009,17 +3759,22 @@
       // (Set으로 중복 building_id를 지워서 조각이 여러 개인 건물도 이름은 한 번만)
       const ids = [...new Set(geo.features.map(f => f.properties.building_id))];
       const tags = ids.map(id => {
-        const c = centerOf(id);
+        // geojson 속성에 label_lng·label_lat가 있으면 그 자리에 이름표를 둠
+        // (도서관처럼 가운데가 뚫린 건물은 도형 가운데가 빈 마당이라 이름표가 허공에 뜨기 때문)
+        const pin = geo.features.find(g => g.properties.building_id === id && g.properties.label_lng && g.properties.label_lat);
+        const c = pin ? [Number(pin.properties.label_lng), Number(pin.properties.label_lat)] : centerOf(id);
         if (!c) return null;
         // 조각이 여러 개면 가장 높은 조각의 높이(m)를 씀. 높이가 없으면 건물을 세울 때와 같은 15m
         const h = Math.max(...geo.features
           .filter(g => g.properties.building_id === id)
           .map(g => Number(g.properties.height) || 15));
+        // label_anchor가 'center'면 이름표 가운데를 그 자리에 (기본은 이름표 아래 끝이 지붕 위)
+        const onSpot = !!(pin && pin.properties.label_anchor === 'center');
         const el = document.createElement('div');
-        el.className = 'bld-label';
+        el.className = 'bld-label' + (onSpot ? ' on-spot' : '');
         el.setAttribute('aria-hidden', 'true');   // 이름은 패널에서 읽어 주므로 화면 읽기에서는 건너뜀
         el.innerHTML = `<span>${esc((byId[id] && byId[id].name) || id)}</span>`;
-        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat(c).addTo(map);
+        const marker = new maplibregl.Marker({ element: el, anchor: onSpot ? 'center' : 'bottom' }).setLngLat(c).addTo(map);
         return { marker, h, lat: c[1] };
       }).filter(Boolean);
 
@@ -1036,6 +3791,7 @@
       map.on('move', liftTags);
 
       // 입구 마커: 시트 facilities에서 type이 '입구'이고 좌표가 있는 것만 점으로 만듦
+      // 점 색 = 입구의 접근성 수준 (건물·길과 같은 4색)
       const entrances = {
         type: 'FeatureCollection',
         features: facilities
@@ -1043,24 +3799,73 @@
           .map(f => ({
             type: 'Feature',
             geometry: { type: 'Point', coordinates: [Number(f.lng), Number(f.lat)] },
-            properties: { building_id: f.building_id, facility_id: f.facility_id }
+            properties: {
+              building_id: f.building_id, facility_id: f.facility_id,
+              access_level: LEVELS[f.access_level] ? f.access_level : '정보 없음'
+            }
           }))
       };
       map.addSource('entrances', { type: 'geojson', data: entrances });
+      // 확대할수록 점도 커짐
+      const dotR = ['interpolate', ['linear'], ['zoom'], 15, 6, 17, 8, 19, 11];
+      map.addLayer({   // 흰 받침: 같은 색 건물 위에서도 점이 묻히지 않게
+        id: 'entrance-halo', source: 'entrances', type: 'circle',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 9, 17, 11, 19, 14],
+          'circle-color': '#ffffff'
+        }
+      });
       map.addLayer({
         id: 'entrance-dots', source: 'entrances', type: 'circle',
         paint: {
-          'circle-radius': isMobile() ? 7 : 6,      // 휴대폰은 손가락으로 누르기 쉽게 조금 크게
-          'circle-color': '#ffffff',
+          'circle-radius': dotR,
+          'circle-color': ['match', ['get', 'access_level'],
+            '원활', LEVELS['원활'].color, '일부 제약', LEVELS['일부 제약'].color,
+            '어려움', LEVELS['어려움'].color, LEVELS['정보 없음'].color],
           'circle-stroke-color': '#1d2622',          // --ink 색 테두리
-          'circle-stroke-width': 2.5
+          'circle-stroke-width': 2
         }
       });
-      // 누르기 영역: 보이는 동그라미 둘레에 안 보이는 큰 동그라미(지름 44px, 손가락 권장 크기)를 깔아
-      // 근처만 눌러도 입구가 선택되게 함
+      // 선택한 입구: 흰 받침 바로 바깥에 2px 버건디 테두리만 더함 (점 크기·안쪽 색은 그대로)
+      const HALO_STOPS = [[15, 9], [17, 11], [19, 14]];   // 흰 받침 반지름(px)과 같은 값
+      map.addLayer({
+        id: 'entrance-selected', source: 'entrances', type: 'circle',
+        filter: ['==', ['get', 'facility_id'], '__none__'],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], ...HALO_STOPS.flat()],
+          'circle-opacity': 0,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': CONFIG.highlight
+        }
+      });
+      // 누르기 영역: 안 보이는 큰 동그라미(지름 44px, 손가락 권장 크기)를 깔아 근처만 눌러도 입구가 선택되게 함
       map.addLayer({
         id: 'entrance-hit', source: 'entrances', type: 'circle',
         paint: { 'circle-radius': 22, 'circle-color': '#000000', 'circle-opacity': 0 }
+      });
+
+      // 카페 마커: facilities에서 type이 '카페'이고 좌표가 있는 것만
+      // HTML 버튼이라 키보드(Tab)로도 선택 가능. 건물 안 카페면 그 건물 패널 맨 위에, 건물이 없으면 카페만 보여 줌
+      facilities.filter(f => f.type === '카페' && f.lng && f.lat).forEach(f => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'cafe-marker' + (CONFIG.cafeIcon ? ' has-img' : '');
+        el.dataset.fid = f.facility_id;   // 선택 표시(markCafe)에서 찾을 때 씀
+        el.setAttribute('aria-label', '카페: ' + (f.location_desc || '이름 없음') + ', 상세 정보 열기');
+        el.innerHTML = cafeMarkHtml();
+        el.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (currentTab !== 'map') return;   // 상세 정보는 '접근성 지도' 탭에서만
+          if (f.building_id) { showBuilding(f.building_id, f.facility_id); return; }
+          clearSelection();
+          showPanelHtml(`<h2>${esc(f.location_desc || '카페')}</h2>
+            <div class="top-entrance">${facCardHtml(f, photosByFac, { open: true, focus: true })}</div>`);
+        });
+        // CONFIG.cafeLift에 있는 카페는 그만큼 위로 올리고 선으로 실제 위치를 가리킴
+        const lift = Number((CONFIG.cafeLift || {})[f.facility_id]) || 0;
+        if (lift) { el.classList.add('lifted'); el.style.setProperty('--lift', lift + 'px'); }
+        new maplibregl.Marker({ element: el, anchor: lift ? 'bottom' : 'center', offset: [0, -lift] })
+          .setLngLat([Number(f.lng), Number(f.lat)]).addTo(map);
       });
 
       // ---------- 길 상태 ----------
@@ -1128,7 +3933,7 @@
         if (minX > maxX) return;
         map.easeTo({
           center: [(minX + maxX) / 2, (minY + maxY) / 2],
-          padding: isMobile() ? { bottom: window.innerHeight * 0.6 } : { right: $('panel').offsetWidth + 16 },
+          padding: panelPadding(),
           duration: reduceMotion ? 0 : 700
         });
       }
@@ -1137,28 +3942,261 @@
       else showStatus('시트 연결 완료: 건물 ' + buildings.length + '곳, 시설 ' + facilities.length + '건, 소식 ' + news.length + '건, 사진 ' + photos.length + '장, 길 ' + routeGeo.features.length + '개'
         + (notDrawn.length ? '\n(시트에는 있지만 선이 없는 길: ' + notDrawn.join(', ') + ')' : ''));
 
+      // 선택한 카페 표시: 입구와 같은 효과 (아이콘 바깥 흰 테두리 + 2px 버건디, 고른 순간 한 번 파동)
+      function markCafe(fid, ripple) {
+        document.querySelectorAll('.cafe-marker.is-selected').forEach(el => { if (el.dataset.fid !== fid) el.classList.remove('is-selected'); });
+        if (!fid) return;
+        const el = document.querySelector(`.cafe-marker[data-fid="${CSS.escape(fid)}"]`);
+        if (!el) return;
+        el.classList.add('is-selected');
+        if (!ripple || reduceMotion) return;
+        if (lastRipple.fid === fid && performance.now() - lastRipple.t < 800) return;
+        lastRipple = { fid, t: performance.now() };
+        const r = document.createElement('span');
+        r.className = 'cafe-ripple';
+        r.setAttribute('aria-hidden', 'true');
+        el.appendChild(r);
+        r.addEventListener('animationend', () => r.remove(), { once: true });
+        setTimeout(() => r.remove(), 1000);
+      }
+
+      // 선택한 입구 표시: fid의 점에만 버건디 테두리 (null이면 지움)
+      // ripple이면 그 순간 한 번만 원형 파동 (700ms, 1.4배, 투명도 0.5→0, 반복 없음, 움직임 줄이기면 생략)
+      let lastRipple = { fid: null, t: 0 };
+      function markEntrance(fid, ripple) {
+        if (!map.getLayer('entrance-selected')) return;
+        map.setFilter('entrance-selected', ['==', ['get', 'facility_id'], fid || '__none__']);
+        if (!fid || !ripple || reduceMotion) return;
+        if (lastRipple.fid === fid && performance.now() - lastRipple.t < 800) return;   // 같은 클릭에서 두 번 울리지 않게
+        lastRipple = { fid, t: performance.now() };
+        const f = facilities.find(x => x.facility_id === fid);
+        if (!f || !f.lng || !f.lat) return;
+        // 지금 확대 단계의 흰 받침 크기에 맞춘 파동 (테두리 바깥선에서 시작)
+        const z = map.getZoom();
+        let r = HALO_STOPS[0][1];
+        for (let i = 1; i < HALO_STOPS.length; i++) {
+          const [z0, r0] = HALO_STOPS[i - 1], [z1, r1] = HALO_STOPS[i];
+          if (z >= z0) r = z >= z1 ? r1 : r0 + (r1 - r0) * (z - z0) / (z1 - z0);
+        }
+        const el = document.createElement('div');
+        el.className = 'ent-ripple';
+        el.setAttribute('aria-hidden', 'true');
+        el.innerHTML = '<span></span>';
+        el.firstChild.style.width = el.firstChild.style.height = (r + 2) * 2 + 'px';
+        const m = new maplibregl.Marker({ element: el }).setLngLat([Number(f.lng), Number(f.lat)]).addTo(map);
+        el.firstChild.addEventListener('animationend', () => m.remove(), { once: true });
+        setTimeout(() => m.remove(), 1000);   // 애니메이션이 안 끝나도 확실히 지움
+      }
+
       // 건물 하나를 패널에 열고 지도에서 선택 표시 (건물 클릭·입구 마커 클릭에서 함께 씀)
       // focusId: 입구 마커로 열었을 때 그 입구의 facility_id (건물을 직접 누르면 null)
       function showBuilding(id, focusId, fallbackName) {
         const b = byId[id] || { building_id: id, name: fallbackName, access_level: '정보 없음' };
         try {
+          // 새 건물(또는 같은 건물)을 다시 열면 이전 입구·시설 선택 표시를 먼저 지움
+          facRing.remove();
+          markEntrance(null);
+          markCafe(null);
           openPanel(b, facsById[id] || [], newsById[id] || [], photosByBld[id] || [], photosByFac, focusId);
           selectBuilding(id);
+          // 고른 건물만 제 색. 입구 마커로 열었으면 그 입구만, 건물을 눌렀으면 그 건물 입구 모두 제 색
+          const ent = focusId && (facsById[id] || []).some(f => f.facility_id === focusId && f.type === '입구');
+          setFocus({ buildings: [id], entrances: ent ? [focusId] : [] });
+          if (ent) markEntrance(focusId, true);   // 입구 마커로 열었으면 그 입구에 테두리 + 한 번 파동
         } catch (err) { showStatus('건물 선택 오류: ' + err.message, true); }
       }
 
+      // 패널에서 입구·시설 카드를 펼치면: 지도에서 그 자리를 버건디 고리로 표시하고 그쪽으로 이동
+      // (입구면 그 입구 점만 제 색, 다른 시설이면 입구 점은 모두 흐리게)
+      focusFacility = fid => {
+        const f = facilities.find(x => x.facility_id === fid);
+        if (!f || currentTab !== 'map') return;
+        const bid = f.building_id || currentBld;
+        setFocus({ buildings: bid ? [bid] : [], entrances: f.type === '입구' ? [fid] : ['__none__'] });
+        if (!f.lng || !f.lat) { facRing.remove(); markEntrance(null); markCafe(null); return; }
+        const c = [Number(f.lng), Number(f.lat)];
+        if (f.type === '입구') { facRing.remove(); markCafe(null); markEntrance(fid, true); }   // 입구: 점 테두리 + 파동
+        else if (f.type === '카페' && document.querySelector(`.cafe-marker[data-fid="${CSS.escape(fid)}"]`)) {
+          facRing.remove(); markEntrance(null); markCafe(fid, true);                            // 카페: 아이콘 테두리 + 파동
+        } else { markEntrance(null); markCafe(null); facRing.setLngLat(c).addTo(map); }         // 다른 시설: 작은 고리
+        map.easeTo({ center: c, padding: panelPadding(), duration: reduceMotion ? 0 : 600 });
+      };
+      // 카드를 모두 접으면 건물 강조로 돌아감
+      unfocusFacility = () => {
+        facRing.remove();
+        markEntrance(null);
+        markCafe(null);
+        if (currentBld) setFocus({ buildings: [currentBld], entrances: [] });
+      };
+
+      // ==================== 목록 보기 ====================
+      // 지도와 같은 데이터(geo의 건물, buildings 시트의 수준, facilities 시트의 입구·시설)로 만든 텍스트 목록
+      // 시트에 없는 값은 지어내지 않고 '정보 없음' 또는 '현장 확인 필요'로 표시
+      const LV_ORDER = ['원활', '일부 제약', '어려움', '정보 없음'];
+      const lvState = { q: '', level: '전체', open: null };
+      const safeId = id => String(id).replace(/[^\w-]/g, '_');
+      const lvDot = lv => `<span class="lv-dot" style="background:${LEVELS[lv].color}" aria-hidden="true"></span>`;
+      const lvBuildings = ids.map(id => {
+        const row = byId[id] || {};
+        const facs = facsById[id] || [];
+        return {
+          id, name: row.name || id, row,
+          level: LEVELS[row.access_level] ? row.access_level : '정보 없음',
+          ents: facs.filter(f => f.type === '입구'),
+          others: facs.filter(f => f.type !== '입구')
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+      // 수준별 개수와 필터 버튼
+      const lvCount = lv => lvBuildings.filter(b => b.level === lv).length;
+      $('lv-counts').innerHTML = `<b>전체 ${lvBuildings.length}곳</b>` +
+        LV_ORDER.map(lv => `<span class="chip ${LV_CLASS[lv]}">${lv} ${lvCount(lv)}곳</span>`).join('');
+      $('lv-filter').innerHTML = ['전체', ...LV_ORDER].map(lv =>
+        `<button type="button" data-lv="${lv}" aria-pressed="${lv === '전체'}">${lv === '전체' ? '' : lvDot(lv)}${lv} (${lv === '전체' ? lvBuildings.length : lvCount(lv)})</button>`).join('');
+
+      const entLevel = f => LEVELS[f.access_level] ? f.access_level : '정보 없음';
+      const entName = f => f.location_desc || f.facility_id || '입구';
+      const dd = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+      const needCheck = '<span class="meta">현장 확인 필요</span>';
+
+      function lvDetailHtml(b) {
+        // 건물 정보: 장애인 화장실·엘리베이터는 없으면 '정보 없음', 그 밖의 시설 종류는 있는 것만
+        const byType = {};
+        b.others.forEach(f => { (byType[f.type || '기타'] ||= []).push(f); });
+        const sumOf = list => {
+          const floors = [...new Set(list.map(f => f.floor).filter(Boolean))].sort((x, y) => floorRank(x) - floorRank(y));
+          return esc(`${floors.length ? floors.join('·') + ' · ' : ''}${list.length}곳`);
+        };
+        const checked = parseDate(b.row.last_checked);
+        const types = [...new Set(['화장실', '엘리베이터', ...Object.keys(byType)])].sort((x, y) =>
+          (TYPE_ORDER.indexOf(x) + 1 || 99) - (TYPE_ORDER.indexOf(y) + 1 || 99));
+        let h = `<h4>건물 정보</h4><dl class="kv">
+          ${dd('전체 수준', `${lvChip(b.level)} <span class="kv-sub">${esc(LEVELS[b.level].desc)}</span>`)}
+          ${types.map(t => dd(esc(TYPE_TITLES[t] || t), byType[t] ? sumOf(byType[t]) : '<span class="meta">정보 없음</span>')).join('')}
+          ${b.row.summary ? dd('안내', esc(b.row.summary)) : ''}
+          ${b.row.note ? dd('참고', esc(b.row.note)) : ''}
+          ${dd('현장 확인', checked ? fmtDate(checked) : needCheck)}
+        </dl>`;
+        // 입구 정보
+        h += `<h4>입구 정보</h4>`;
+        h += b.ents.length ? b.ents.map(f => {
+          const lv = entLevel(f), d = parseDate(f.last_checked);
+          return `<div class="lv-sub"><h5>${esc(entName(f))}</h5><dl class="kv">
+            ${dd('휠체어 출입', `${lvChip(lv)} <span class="kv-sub">${esc(ENTRANCE_DESC[lv])}</span>`)}
+            ${dd('설비', f.equipment ? esc(f.equipment) : needCheck)}
+            ${f.directions ? dd('가는 길', esc(f.directions)) : ''}
+            ${f.note ? dd('주의', esc(f.note)) : ''}
+            ${dd('현장 확인', d ? fmtDate(d) : needCheck)}
+          </dl>${f.lng && f.lat ? `<button type="button" class="lv-ent-go" data-go="${esc(b.id)}" data-fid="${esc(f.facility_id)}" aria-label="${esc(b.name)} ${esc(entName(f))} 지도에서 보기">지도에서 이 입구 보기</button>` : ''}</div>`;
+        }).join('') : `<p class="meta">등록된 입구 정보가 없어요. 현장 확인이 필요해요.</p>`;
+        // 시설 정보
+        h += `<h4>시설 정보</h4>`;
+        h += b.others.length ? `<ul class="lv-facs">${b.others
+          .slice().sort((x, y) => (TYPE_ORDER.indexOf(x.type) + 1 || 99) - (TYPE_ORDER.indexOf(y.type) + 1 || 99) || floorRank(x.floor) - floorRank(y.floor))
+          .map(f => `<li><b>${esc(TYPE_TITLES[f.type] || f.type || '시설')}</b> ${esc([f.floor, f.location_desc].filter(Boolean).join(' ') || '위치 정보 없음')}${f.equipment ? ` · ${esc(f.equipment)}` : ''}</li>`).join('')}</ul>`
+          : `<p class="meta">등록된 시설 정보가 없어요.</p>`;
+        return h;
+      }
+
+      function lvCardHtml(b) {
+        const sid = safeId(b.id), sel = b.id === currentBld, open = lvState.open === b.id;
+        return `<li class="lv-card${sel ? ' is-selected' : ''}" data-bid="${esc(b.id)}">
+          <article aria-labelledby="lvh-${sid}">
+            <div class="lv-card-head">
+              <h3 id="lvh-${sid}">${esc(b.name)}</h3>
+              ${lvChip(b.level)}
+              ${sel ? '<span class="lv-sel">지도에서 선택한 건물</span>' : ''}
+            </div>
+            <p class="lv-ent-count">주요 출입구 ${b.ents.length}개${b.ents.length ? '' : ' · 현장 확인 필요'}</p>
+            ${b.ents.length ? `<ul class="lv-ents" aria-label="${esc(b.name)} 입구별 수준">${b.ents.map(f =>
+              `<li>${lvDot(entLevel(f))}${esc(entName(f))} · ${entLevel(f)}</li>`).join('')}</ul>` : ''}
+            <div class="lv-actions">
+              <button type="button" class="lv-more" aria-expanded="${open}" aria-controls="lvd-${sid}">${open ? '상세 정보 접기' : '상세 정보 보기'}</button>
+              <button type="button" class="lv-go" data-go="${esc(b.id)}" aria-label="${esc(b.name)} 지도에서 보기">지도에서 보기</button>
+            </div>
+            <div id="lvd-${sid}" class="lv-detail"${open ? '' : ' hidden'}>${open ? lvDetailHtml(b) : ''}</div>
+          </article>
+        </li>`;
+      }
+
+      // 장애인 주차구역: 시트에 type '주차' 행이 있을 때만 목록 아래에 표시
+      function lvParkingHtml() {
+        const rows = facilities.filter(f => f.type === '주차');
+        if (!rows.length) return '';
+        return `<h3 id="lv-parking-title">장애인 주차구역</h3><ul class="lv-list">${rows.map(f => {
+          const d = parseDate(f.last_checked);
+          return `<li class="lv-card"><h4 style="margin:0 0 6px">${esc(f.location_desc || f.facility_id)}</h4>
+            <dl class="kv">${f.equipment ? dd('설비', esc(f.equipment)) : ''}${dd('현장 확인', d ? fmtDate(d) : needCheck)}</dl></li>`;
+        }).join('')}</ul>`;
+      }
+
+      // fromView: 목록 보기로 막 들어왔을 때 (지도에서 고른 건물을 펼쳐 보여 줌)
+      renderList = fromView => {
+        if (fromView && currentBld) lvState.open = currentBld;
+        const q = lvState.q.trim().replace(/\s+/g, '');
+        const shown = lvBuildings.filter(b =>
+          (lvState.level === '전체' || b.level === lvState.level) &&
+          (!q || b.name.replace(/\s+/g, '').includes(q)));
+        $('lv-list').innerHTML = shown.map(lvCardHtml).join('');
+        $('lv-status').textContent = shown.length
+          ? `${shown.length}곳을 보여 주고 있어요${lvState.level !== '전체' ? ` (${lvState.level})` : ''}.`
+          : '검색 결과가 없습니다.';
+        const park = lvParkingHtml();
+        $('lv-parking').innerHTML = park;
+        $('lv-parking').hidden = !park;
+        if (fromView && currentBld) {
+          const card = $('lv-list').querySelector(`[data-bid="${CSS.escape(currentBld)}"]`);
+          if (card) card.scrollIntoView({ block: 'start' });   // 카드 맨 위(건물명)부터 보이게
+        }
+      };
+
+      $('lv-search').addEventListener('input', e => { lvState.q = e.target.value; renderList(); });
+      $('lv-filter').addEventListener('click', e => {
+        const b = e.target.closest('button[data-lv]');
+        if (!b) return;
+        lvState.level = b.dataset.lv;
+        $('lv-filter').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        renderList();
+      });
+      $('lv-list').addEventListener('click', e => {
+        // 지도에서 보기 / 지도에서 이 입구 보기: 지도 보기로 돌아가 건물 패널을 열고 강조
+        const go = e.target.closest('[data-go]');
+        if (go) {
+          setView('map', { noFocus: true });
+          showBuilding(go.dataset.go, go.dataset.fid || null);
+          return;
+        }
+        // 상세 정보 펼치기 (한 번에 한 건물만)
+        const more = e.target.closest('.lv-more');
+        if (more) {
+          const id = more.closest('.lv-card').dataset.bid;
+          lvState.open = lvState.open === id ? null : id;
+          renderList();
+          const again = $('lv-list').querySelector(`[data-bid="${CSS.escape(id)}"] .lv-more`);
+          if (again) again.focus({ preventScroll: true });   // 다시 그린 뒤에도 포커스가 그 버튼에 남게
+        }
+      });
+      if (currentView === 'list') renderList(true);   // 불러오는 동안 목록 보기를 눌렀다면 바로 채움
+      // ==================== 목록 보기 끝 ====================
+
       // 4) 건물 클릭 → 상세 패널 (같은 자리에 입구 마커가 있으면 마커 쪽에 맡김)
+      // 상세 패널은 '접근성 지도' 탭에서만 열림 (길찾기 탭의 지도 클릭은 내비게이션용으로 남겨 둠)
       map.on('click', 'buildings-3d', e => {
         if (map.queryRenderedFeatures(e.point, { layers: ['entrance-hit'] }).length) return;
+        if (currentTab === 'route') { navPick(e.features[0].properties.building_id); return; }   // ⑤ 길찾기 탭: 출발·도착 고르기
+        if (currentTab !== 'map') return;
         showBuilding(e.features[0].properties.building_id, null, e.features[0].properties.name);
       });
-      // 입구 마커 클릭 → 그 건물 패널을 입구 상자가 펼쳐진 채로, 누른 입구를 맨 위에 강조
+      // 입구 마커 클릭 → 그 건물 패널을 열고, 누른 입구를 패널 맨 위에 강조
       map.on('click', 'entrance-hit', e => {
         const p = e.features[0].properties;
+        if (currentTab === 'route') { navPick(p.building_id); return; }
+        if (currentTab !== 'map') return;
         showBuilding(p.building_id, p.facility_id);
       });
       // 길 클릭 → 길 패널 (입구 마커나 건물이 같은 자리에 있으면 그쪽에 맡김)
       map.on('click', 'routes-hit', e => {
+        if (currentTab !== 'map') return;
         if (map.queryRenderedFeatures(e.point, { layers: ['entrance-hit', 'buildings-3d'] }).length) return;
         const id = e.features[0].properties.route_id;
         const row = routeById[id] || { route_id: id };
@@ -1172,17 +4210,919 @@
       map.on('mouseenter', 'entrance-hit', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'entrance-hit', () => { map.getCanvas().style.cursor = ''; });
 
-      // [개발용] 좌표 따기: 지도를 누르면 그 자리의 경도·위도를 상태 쪽지에 띄우고 복사
+      // [점검용] 좌표 따기: 지도를 누르면 그 자리의 경도·위도를 상태 쪽지에 띄우고 복사
       // 경도와 위도 사이를 탭으로 복사해서, 시트의 lng 칸에 붙여 넣으면 옆 lat 칸까지 한 번에 채워짐
-      // keepStatus가 false가 되면(기능 고정) 자동으로 꺼짐
+      // 주소에 ?pick 이 있거나 keepStatus가 true일 때만 켜짐 (평소 사용자 화면에서는 꺼져 있음)
+      if (PICK) showStatus('좌표 따기 모드: 지도를 누르면 경도·위도가 복사돼요');
+      // 복사: 새 방식(clipboard)이 막히면 옛 방식(execCommand)으로 한 번 더 시도
+      function copyText(text) {
+        const fallback = () => {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          let ok = false;
+          try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+          ta.remove();
+          return ok;
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(text).then(() => true, () => fallback());
+        }
+        return Promise.resolve(fallback());
+      }
       map.on('click', e => {
-        if (!CONFIG.keepStatus) return;
+        if (!PICK) return;
         const lng = e.lngLat.lng.toFixed(6), lat = e.lngLat.lat.toFixed(6);
-        const copied = navigator.clipboard
-          ? navigator.clipboard.writeText(lng + '\t' + lat).then(() => true, () => false)
-          : Promise.resolve(false);
-        copied.then(ok => showStatus('좌표 lng ' + lng + ', lat ' + lat + (ok ? ' (복사됨)' : '')));
+        copyText(lng + '\t' + lat).then(ok => showStatus('좌표 lng ' + lng + ', lat ' + lat +
+          (ok ? ' (복사됨)' : '\n복사가 막혔어요. 이 숫자를 드래그해서 복사하세요')));
       });
+
+      // ==================== 길찾기 (시범 기능) ====================
+      // 안전 기준 5가지를 코드에서 지킨 자리에 ①~⑤ 표시
+      // ① 경로는 data/routes.geojson의 선이 실제로 이어진 곳만 따라감. 떨어진 선끼리 직선으로 잇지 않음
+      //    (그림 오차로 snapM 안에 닿은 길 끝만 이어진 것으로 봄. 끝점 없이 서로 지나가기만 하는 선은 이어지지 않음)
+      // ② 길 수준별 처리는 CONFIG.nav.profiles (혼자: 어려움 제외 / 도움받아 이동: 어려움 포함하되 강한 경고)
+      //    휠체어로 드나들기 '어려움'인 입구는 어느 경우에도 출발·도착으로 쓰지 않음
+      // ③ 경로가 없으면 이유와 '센터에 문의' 메시지
+      // ④ 결과에 참고용 문구와 지나가는 길의 확인일
+      // ⑤ 출발·도착 고르기는 길찾기 탭에서만 (접근성 지도 탭의 패널 열기와 분리)
+      // CONFIG.nav에 값이 빠졌을 때 쓰는 기본값
+      const NAV = Object.assign({
+        profiles: {
+          wheelchair: { '원활': 1, '일부 제약': 2, '정보 없음': 3 },
+          assisted: { '원활': 1, '일부 제약': 1.3, '정보 없음': 1.5, '어려움': 2 }
+        },
+        entranceCost: { '원활': 0, '일부 제약': 30, '정보 없음': 30 },
+        snapM: 1, entranceMaxM: 30, bypassSlackM: 10,
+        speed: 0.8, defaultFrom: 'main_admin', previewEveryM: 25, previewMaxM: 25
+      }, CONFIG.nav || {});
+
+      // 경도·위도 ↔ 평면 미터 (캠퍼스 크기에서는 오차가 무시할 만큼 작음). x = 동쪽, y = 북쪽
+      const LNG0 = 127.0185, LAT0 = 37.6513;
+      const KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KY = 110540;
+      const toXY = ([lng, lat]) => [(lng - LNG0) * KX, (lat - LAT0) * KY];
+      const toLL = ([x, y]) => [x / KX + LNG0, y / KY + LAT0];
+      const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+      const bearingXY = (a, b) => (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180 / Math.PI + 360) % 360;   // 북 0°, 시계 방향
+      // 점 p에서 선분 a–b 위 가장 가까운 점 q (t: a에서 b까지 비율 0~1, d: 거리 m)
+      function proj(p, a, b) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy;
+        const t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)) : 0;
+        const q = [a[0] + t * dx, a[1] + t * dy];
+        return { t, q, d: dist(p, q) };
+      }
+
+      // 1) 길 선을 꼭짓점 목록으로 (MultiLineString은 조각마다 따로)
+      const lines = [];
+      routeGeo.features.forEach(f => {
+        const g = f.geometry;
+        if (!g) return;
+        const parts = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+        parts.forEach(c => {
+          if (c.length > 1) lines.push({ id: f.properties.route_id, condition: f.properties.condition, pts: c.map(toXY) });
+        });
+      });
+      // 2) ① 길 끝이 다른 선의 '중간'에 닿아 있으면(snapM 안) 그 자리에 꼭짓점을 끼워 넣어 잇기
+      lines.forEach(A => {
+        [A.pts[0], A.pts[A.pts.length - 1]].forEach(end => {
+          lines.forEach(B => {
+            if (B === A) return;
+            for (let i = 0; i < B.pts.length - 1; i++) {
+              const r = proj(end, B.pts[i], B.pts[i + 1]);
+              if (r.d <= NAV.snapM && dist(r.q, B.pts[i]) > NAV.snapM && dist(r.q, B.pts[i + 1]) > NAV.snapM) {
+                B.pts.splice(i + 1, 0, r.q);
+                break;
+              }
+            }
+          });
+        });
+      });
+      // 3) 지점(node)과 구간(edge) 만들기. snapM 안의 꼭짓점은 같은 지점으로 봄
+      const nodes = [], edges = [];
+      function nodeOf(p) {
+        for (let i = 0; i < nodes.length; i++) if (dist(nodes[i], p) <= NAV.snapM) return i;
+        nodes.push(p);
+        return nodes.length - 1;
+      }
+      lines.forEach(L => {
+        for (let i = 0; i < L.pts.length - 1; i++) {
+          const a = nodeOf(L.pts[i]), b = nodeOf(L.pts[i + 1]);
+          if (a !== b) edges.push({ a, b, len: dist(nodes[a], nodes[b]), id: L.id, condition: L.condition });
+        }
+      });
+      const adj = nodes.map(() => []);
+      edges.forEach((e, i) => { adj[e.a].push(i); adj[e.b].push(i); });
+      console.log(`[길찾기] 길망: 지점 ${nodes.length}개, 구간 ${edges.length}개`);
+
+      // 길 수준별 부담 (프로필에 없는 수준 = 지나갈 수 없음)
+      const wOf = (e, prof) => prof[e.condition] ?? Infinity;
+
+      // 입구에서 가장 가까운 '지나갈 수 있는' 길 위 지점
+      // 단, 상태와 상관없이 가장 가까운 길보다 bypassSlackM 넘게 먼 길에는 붙이지 않음
+      // (어려움 길 끝에 있는 건물을 조사 안 한 직선으로 '건너뛰어' 잇는 것을 막음 ①)
+      function attach(p, prof, maxM = NAV.entranceMaxM) {
+        let nearestAny = Infinity, best = null;
+        edges.forEach((e, i) => {
+          const r = proj(p, nodes[e.a], nodes[e.b]);
+          if (r.d < nearestAny) nearestAny = r.d;
+          if (!isFinite(wOf(e, prof))) return;
+          if (!best || r.d < best.d) best = { ...r, ei: i };
+        });
+        if (!best || best.d > maxM || best.d > nearestAny + NAV.bypassSlackM) return null;
+        return best;
+      }
+
+      // 다익스트라: S(출발 입구가 붙은 길 위 지점) → T(도착 쪽). 길망에 실제로 이어진 구간만 지나감 ①
+      // 결과 pts[i]→pts[i+1] 구간은 edges[eids[i]] 위에 있음
+      function shortest(S, T, prof) {
+        const n = nodes.length;
+        const cost = new Array(n).fill(Infinity), prev = new Array(n).fill(-1), prevE = new Array(n).fill(-1), done = new Array(n).fill(false);
+        const es = edges[S.ei], et = edges[T.ei];
+        [es.a, es.b].forEach(v => { cost[v] = dist(S.q, nodes[v]) * wOf(es, prof); prevE[v] = S.ei; });
+        for (;;) {
+          let u = -1;
+          for (let i = 0; i < n; i++) if (!done[i] && cost[i] < Infinity && (u < 0 || cost[i] < cost[u])) u = i;
+          if (u < 0) break;
+          done[u] = true;
+          adj[u].forEach(ei => {
+            const e = edges[ei], w = wOf(e, prof);
+            if (!isFinite(w)) return;
+            const v = e.a === u ? e.b : e.a;
+            const c = cost[u] + e.len * w;
+            if (c < cost[v]) { cost[v] = c; prev[v] = u; prevE[v] = ei; }
+          });
+        }
+        let end = -1, best = Infinity;
+        [et.a, et.b].forEach(v => {
+          const c = cost[v] + dist(nodes[v], T.q) * wOf(et, prof);
+          if (c < best) { best = c; end = v; }
+        });
+        // 출발·도착이 같은 구간 위에 있으면 그 구간만 따라가는 것도 후보
+        if (S.ei === T.ei) {
+          const c = dist(S.q, T.q) * wOf(es, prof);
+          if (c <= best) return { cost: c, pts: [S.q, T.q], eids: [S.ei] };
+        }
+        if (end < 0 || best === Infinity) return null;
+        const pts = [T.q], eids = [T.ei];
+        for (let v = end; ; v = prev[v]) {
+          pts.push(nodes[v]);
+          eids.push(prevE[v]);
+          if (prev[v] === -1) break;
+        }
+        pts.push(S.q);
+        return { cost: best, pts: pts.reverse(), eids: eids.reverse() };
+      }
+
+      const HERE_ID = '__here__';   // 출발 목록의 '현재 위치' 값
+      let here = null;              // 마지막으로 받은 내 위치 { xy, acc(오차 m), t(받은 시각) }
+      let hereFresh = () => false, startHere = () => { }, waitHere = fn => fn(), updateHereOption = () => { };   // 현재 위치 구역에서 채움
+      const HERE_PATH_MAX_M = 60;   // 현재 위치에서 이용할 수 있는 길까지 이보다 멀면 출발로 못 씀 (캠퍼스 밖 등)
+      const bName = id => id === HERE_ID ? '현재 위치' : (byId[id] && byId[id].name) || id;
+
+      // 입구의 휠체어 출입 수준: 시트 access_level을 그대로 씀.
+      // 비어 있거나 '정보 없음'이면 설명 글로 '계단만 있는 입구'인지만 살펴 '어려움'으로 낮춤
+      // (설명 글만 보고 '원활'로 올리지는 않음: 확인 안 한 것을 좋게 말하지 않기 위해)
+      function entranceLevel(f) {
+        if (LEVELS[f.access_level] && f.access_level !== '정보 없음') return { lv: f.access_level, est: false };
+        const t = [f.equipment, f.location_desc, f.note].join(' ').replace(/경사로\s*(없음|미설치|x)/gi, '');
+        if (/계단/.test(t) && !/경사로|평지|턱\s*없|무단차|엘리베이터|리프트/.test(t)) return { lv: '어려움', est: true };
+        return { lv: '정보 없음', est: false };
+      }
+      function entrancesOf(bid) {
+        return facilities
+          .filter(f => f.building_id === bid && f.type === '입구' && f.lng && f.lat)
+          .map(f => ({ f, ...entranceLevel(f), xy: toXY([Number(f.lng), Number(f.lat)]) }));
+      }
+
+      // 건물 → 건물: 쓸 수 있는 입구 짝을 모두 비교해 가장 나은 경로
+      function planRoute(fromId, toId, prof) {
+        const pick = id => {
+          // 현재 위치에서 출발: 위치 한 점을 가장 가까운 이용 가능한 길에 이음
+          if (id === HERE_ID) {
+            if (!hereFresh()) return { fail: '현재 위치를 확인하지 못했어요. 위치 권한을 허용했는지 확인하거나 출발 건물을 골라 주세요.', hard: true };
+            const at = attach(here.xy, prof, HERE_PATH_MAX_M);
+            if (!at) return { fail: `현재 위치 가까이(${HERE_PATH_MAX_M}m 안)에 이용할 수 있는 길이 없어요. 캠퍼스 안에서 다시 시도하거나 출발 건물을 골라 주세요.` };
+            return { list: [{ here: true, f: { building_id: HERE_ID, facility_id: HERE_ID, location_desc: '' }, lv: '원활', est: false, xy: here.xy, at }], excluded: 0 };
+          }
+          const all = entrancesOf(id);
+          if (!all.length) return { fail: `${bName(id)}의 입구 위치가 아직 지도에 등록되지 않았어요.`, hard: true };
+          // ② 휠체어로 드나들기 어려운 입구는 안내에서 뺌 (도움받아 이동이어도 마찬가지)
+          const ok = all.filter(e => e.lv !== '어려움');
+          if (!ok.length) return { fail: `${bName(id)}에 등록된 입구는 모두 휠체어로 드나들기 어려워요.`, hard: true };
+          const near = ok.map(e => ({ ...e, at: attach(e.xy, prof) })).filter(e => e.at);
+          if (!near.length) return { fail: `${bName(id)} 입구 가까이에 이용할 수 있는 길이 아직 없어요.` };
+          return { list: near, excluded: all.length - ok.length };
+        };
+        const A = pick(fromId); if (A.fail) return A;
+        const B = pick(toId); if (B.fail) return B;
+        let best = null;
+        A.list.forEach(s => B.list.forEach(t => {
+          const p = shortest(s.at, t.at, prof);
+          if (!p) return;
+          const total = p.cost + (s.at.d + t.at.d) * 1.5   // 길 데이터 밖 구간(입구–길)은 짧을수록 좋게
+            + (NAV.entranceCost[s.lv] ?? 30) + (NAV.entranceCost[t.lv] ?? 30);   // 원활한 입구를 먼저 고름
+          if (!best || total < best.total) best = { ...p, total, s, t };
+        }));
+        if (!best) return { fail: `${bName(fromId)}에서 ${bName(toId)}까지 이어진 길을 찾지 못했어요.` };
+        best.excluded = A.excluded + B.excluded;
+        return best;
+      }
+
+      // ---------- 길찾기 화면 ----------
+      const navFrom = $('nav-from'), navTo = $('nav-to'), navAssist = $('nav-assist'), navResult = $('nav-result');
+      const hasEntrance = id => entrancesOf(id).length > 0;
+      const opts = ids.map(id => ({ id, name: bName(id) })).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      const optHtml = '<option value="">건물을 골라 주세요</option>' + opts.map(o =>
+        `<option value="${esc(o.id)}">${esc(o.name)}${hasEntrance(o.id) ? '' : ' (입구 위치 미등록)'}</option>`).join('');
+      navFrom.innerHTML = optHtml.replace('</option>', `</option><option value="${HERE_ID}">현재 위치</option>`);
+      navTo.innerHTML = optHtml;
+      [navFrom, navTo, navAssist, $('nav-swap'), $('nav-clear')].forEach(el => { el.disabled = false; });
+
+      // 경로 선: 흰 테두리 + 선택 색 굵은 선, 입구–길 사이는 점선
+      const vis = () => currentTab === 'route' ? 'visible' : 'none';
+      map.addSource('nav', { type: 'geojson', data: EMPTY });
+      map.addLayer({
+        id: 'nav-casing', source: 'nav', type: 'line', filter: ['==', ['get', 'kind'], 'path'],
+        layout: { 'line-cap': 'round', 'line-join': 'round', visibility: vis() },
+        paint: { 'line-color': '#ffffff', 'line-width': lineW + 10 }
+      }, 'entrance-halo');
+      map.addLayer({
+        id: 'nav-line', source: 'nav', type: 'line', filter: ['==', ['get', 'kind'], 'path'],
+        layout: { 'line-cap': 'round', 'line-join': 'round', visibility: vis() },
+        paint: { 'line-color': CONFIG.highlight, 'line-width': lineW + 4 }
+      }, 'entrance-halo');
+      map.addLayer({
+        id: 'nav-connector', source: 'nav', type: 'line', filter: ['==', ['get', 'kind'], 'connector'],
+        layout: { 'line-cap': 'round', visibility: vis() },
+        paint: { 'line-color': CONFIG.highlight, 'line-width': 3, 'line-dasharray': [1.5, 1.5] }
+      }, 'entrance-halo');
+      const makePin = (text, cls) => {
+        const el = document.createElement('div');
+        el.className = 'nav-pin ' + cls;
+        el.textContent = text;
+        el.setAttribute('aria-hidden', 'true');
+        return new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -8] });
+      };
+      const pinFrom = makePin('출발', 'from'), pinTo = makePin('도착', 'to');
+      // 거리뷰 미리 보기에서 지금 보고 있는 자리와 방향 (화살표가 북쪽 0°에서 시계 방향으로 돎)
+      const eyeEl = document.createElement('div');
+      eyeEl.className = 'nav-eye';
+      eyeEl.setAttribute('aria-hidden', 'true');
+      const pinEye = new maplibregl.Marker({ element: eyeEl, rotationAlignment: 'map', pitchAlignment: 'map' });
+
+      let lastRoute = null;   // 지금 그려진 경로 (미리 보기에서 씀)
+      function clearNav() {
+        map.getSource('nav').setData(EMPTY);
+        pinFrom.remove();
+        pinTo.remove();
+        pvDestroy();
+        lastRoute = null;
+        navFocus = null;
+        setFocus(null);
+      }
+      const navPadding = () => {
+        const rv = $('route-view');
+        return isMobile()
+          ? { top: 40, left: 30, right: 30, bottom: rv.offsetHeight + 30 }
+          : { top: 60, right: 80, bottom: 90, left: rv.offsetWidth + 56 };
+      };
+      function drawNav(r) {
+        const line = c => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: c.map(toLL) } });
+        const feats = [{ ...line(r.pts), properties: { kind: 'path' } }];
+        [[r.s.xy, r.s.at.q], [r.t.at.q, r.t.xy]].forEach(([a, b]) => {
+          if (dist(a, b) > 0.5) feats.push({ ...line([a, b]), properties: { kind: 'connector' } });
+        });
+        map.getSource('nav').setData({ type: 'FeatureCollection', features: feats });
+        pinFrom.setLngLat(toLL(r.s.xy)).addTo(map);
+        pinTo.setLngLat(toLL(r.t.xy)).addTo(map);
+        // 출발·도착 건물과 실제로 쓰는 입구만 제 색
+        navFocus = {
+          buildings: [r.s.f.building_id, r.t.f.building_id].filter(id => id !== HERE_ID),
+          entrances: [r.s.f.facility_id, r.t.f.facility_id].filter(id => id !== HERE_ID),
+          dimRoutes: true   // 경로는 버건디 선으로 따로 그려지니 나머지 길은 모두 흐리게
+        };
+        setFocus(navFocus);
+        const all = [r.s.xy, r.t.xy, ...r.pts].map(toLL);
+        const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
+        // 경로가 나오면 위에서 보는 2D로 바꿔 길 전체가 가려지지 않게 (3D 버튼으로 되돌릴 수 있음)
+        viewToggle.to2D(false);
+        // 북쪽이 위인 2D 화면에 경로 전체가 들어오는 자리를 구해, 기울기 0으로 부드럽게 이동
+        const cam = map.cameraForBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]],
+          { padding: navPadding(), maxZoom: 18, bearing: 0 });
+        if (cam) map.easeTo({ ...cam, bearing: 0, pitch: 0, duration: reduceMotion ? 0 : 700 });
+      }
+
+      // 길 선의 처음·끝 점 (지나가는 방향을 판단할 때 씀)
+      const routeEnds = {};
+      routeGeo.features.forEach(f => {
+        const g = f.geometry;
+        if (!g) return;
+        const c = g.type === 'LineString' ? g.coordinates : g.type === 'MultiLineString' ? g.coordinates.flat() : [];
+        if (c.length > 1) routeEnds[f.properties.route_id] = [toXY(c[0]), toXY(c[c.length - 1])];
+      });
+      // 경로를 지나가는 순서대로 '구간'으로 묶기 (같은 길이 이어지면 하나로)
+      function legsOf(r) {
+        const legs = [];
+        for (let i = 0; i < r.pts.length - 1; i++) {
+          const len = dist(r.pts[i], r.pts[i + 1]);
+          if (len < 0.01) continue;
+          const id = edges[r.eids[i]].id;
+          const last = legs[legs.length - 1];
+          if (last && last.id === id) { last.len += len; last.b = r.pts[i + 1]; }
+          else legs.push({ id, len, a: r.pts[i], b: r.pts[i + 1] });
+        }
+        return legs.map(l => {
+          const row = routeById[l.id] || { route_id: l.id };
+          // 길을 그린 방향(시트 from→to)과 반대로 지나가면 이름을 뒤집어 보여 줌
+          const e = routeEnds[l.id];
+          const reversed = !!e && dist(l.a, e[1]) + dist(l.b, e[0]) < dist(l.a, e[0]) + dist(l.b, e[1]);
+          return { ...l, row, reversed, lv: LEVELS[row.condition] ? row.condition : '정보 없음', checked: parseDate(row.last_checked) };
+        });
+      }
+
+      // ③ 경로가 없을 때: 이유 + 센터 문의
+      const contact = CONFIG.centerContact ? ` (${esc(CONFIG.centerContact)})` : '';
+      const failHtml = (msg, hint) => `<div class="nav-box nav-fail" role="alert">
+        <b>안내할 수 있는 경로가 없어요.</b>
+        <span>${esc(msg)}</span>${hint ? `<span>${esc(hint)}</span>` : ''}
+        <span>이동이 필요하면 장애학생지원센터에 문의해 주세요.${contact}</span></div>`;
+
+      function resultHtml(r, from, to, assisted) {
+        const legs = legsOf(r);
+        const gapS = r.s.at.d, gapT = r.t.at.d;
+        const len = legs.reduce((s, l) => s + l.len, 0) + gapS + gapT;
+        const mins = Math.max(1, Math.round(len / NAV.speed / 60));
+        const CHIP = { '원활': 'lv-ok', '일부 제약': 'lv-part', '어려움': 'lv-hard', '정보 없음': 'lv-none' };
+        const chip = lv => `<span class="chip ${CHIP[lv] || 'lv-none'}">${esc(lv)}</span>`;
+        const pin = color => `<svg class="pin" viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1C6 1 1.5 5.5 1.5 11.3 1.5 19 12 31 12 31s10.5-12 10.5-19.7C22.5 5.5 18 1 12 1z" fill="${color}"/><circle cx="12" cy="11" r="4.6" fill="#fff"/></svg>`;
+        // 지나가는 방향대로 '출발 쪽 → 도착 쪽' (시트 from·to가 없으면 길 이름)
+        const legName = (row, rev) => row.from && row.to
+          ? (rev ? `${row.to} → ${row.from}` : `${row.from} → ${row.to}`) : routeLabel(row);
+        const m = v => `약 ${Math.max(1, Math.round(v))}m`;
+        // 출발·도착 아랫줄: '건물 입구 설명 [수준]' (현재 위치면 근처 건물과 오차)
+        const endSub = e => {
+          if (e.here) {
+            const near = nearBuilding(here.xy);
+            return `현재 위치${near ? ` (${esc(near)} 근처)` : ''} · 위치 오차 약 ±${Math.round(here.acc)}m`;
+          }
+          return `<span>${esc(bName(e.f.building_id))} ${esc(e.f.location_desc || '입구')}</span>${chip(e.lv)}`;
+        };
+
+        // ② 이동 시 유의사항
+        const warns = [];
+        legs.filter(l => l.lv === '어려움').forEach(l => warns.push({ strong: true, t: `${legName(l.row, l.reversed)}: 휠체어로 혼자 지나가기 어려운 길이에요${l.row.issue ? ` (${l.row.issue})` : ' (계단·급경사 등)'}. 반드시 도움을 받아 이동해 주세요.` }));
+        legs.filter(l => l.lv === '일부 제약').forEach(l => warns.push({ t: `${legName(l.row, l.reversed)}: 주의가 필요한 길이에요${l.row.issue ? ` (${l.row.issue})` : ''}.` }));
+        legs.filter(l => l.lv === '정보 없음').forEach(l => warns.push({ t: `${legName(l.row, l.reversed)}: 현장에서 확인하지 않은 길이에요.` }));
+        if (r.s.here && here.acc > HERE.warnAccuracyM)
+          warns.push({ t: `위치 오차가 약 ±${Math.round(here.acc)}m라 출발 지점이 실제와 다를 수 있어요.` });
+        [['출발', r.s], ['도착', r.t]].forEach(([k, e]) => {
+          if (!e.here && e.lv !== '원활') warns.push({ t: `${k} 입구(${e.f.location_desc || e.f.facility_id}): 휠체어 출입 ${e.lv}` });
+        });
+        legs.filter(l => l.checked && (Date.now() - l.checked) / 86400000 > CONFIG.recentDays)
+          .forEach(l => warns.push({ t: `${legName(l.row, l.reversed)}: 현장 확인한 지 ${CONFIG.recentDays}일이 넘었어요 (${fmtDate(l.checked)}).` }));
+        if (r.s.here && gapS >= 3) warns.push({ t: `현재 위치에서 길까지 약 ${Math.round(gapS)}m(점선)는 직선으로 이은 표시라 실제로 갈 수 있는 길과 다를 수 있어요.` });
+        const entGap = (r.s.here ? 0 : gapS) + gapT;
+        if (entGap >= 3) warns.push({ t: `입구와 길 사이 약 ${Math.round(entGap)}m(점선)는 현장 조사 안 한 구간이에요.` });
+        if (r.excluded) warns.push({ t: `휠체어로 드나들기 어려운 입구 ${r.excluded}곳은 안내에서 뺐어요.` });
+        // 혼자 지나가기 어려운 구간이 있으면 접지 않고 펼쳐 둠
+        const strong = warns.some(w => w.strong);
+
+        // 단계 타임라인
+        const tl = [];
+        tl.push(`<li class="tl-end">${pin('var(--select)')}<div><b>출발</b><span class="tl-sub">${endSub(r.s)}</span></div></li>`);
+        if (gapS >= 1) tl.push(`<li class="tl-step gap"><span class="tl-dot"></span><span class="tl-len">${m(gapS)}</span><span class="tl-txt">${r.s.here ? '현재 위치' : '입구'}에서 길까지 이동</span></li>`);
+        legs.forEach(l => tl.push(`<li class="tl-step"><span class="tl-dot" style="background:${LEVELS[l.lv].color};border-color:${LEVELS[l.lv].color}"></span>
+          <span class="tl-len">${m(l.len)}</span><span class="tl-txt"><span>${esc(legName(l.row, l.reversed))}</span>${chip(l.lv)}</span></li>`));
+        if (gapT >= 1) tl.push(`<li class="tl-step gap"><span class="tl-dot"></span><span class="tl-len">${m(gapT)}</span><span class="tl-txt">길에서 입구까지 이동</span></li>`);
+        tl.push(`<li class="tl-end">${pin('var(--goal)')}<div><b>도착</b><span class="tl-sub">${endSub(r.t)}</span></div></li>`);
+
+        // ④ 참고용 안내: 문구 + 확인일 + 계산 기준
+        const dates = legs.map(l => l.checked).filter(Boolean).sort((a, b) => a - b);
+        const noCheck = legs.filter(l => !l.checked).length;
+        const range = !dates.length ? '기록 없음'
+          : fmtDate(dates[0]) + (+dates[0] !== +dates[dates.length - 1] ? ' ~ ' + fmtDate(dates[dates.length - 1]) : '');
+        const ref = `<details class="nav-ref">
+          <summary>참고용 안내<small>현장과 다를 수 있어요</small></summary>
+          <div>
+            <span>참고용 안내예요. 현장 상황과 다를 수 있으니 이동 전에 확인해 주세요.</span>
+            <span><b>길 정보 확인일</b> ${range}${noCheck && dates.length ? ` · 확인 기록 없는 구간 ${noCheck}곳` : ''}</span>
+            <ul>${legs.map(l => `<li>${esc(legName(l.row, l.reversed))}: ${l.checked ? '현장 확인 ' + fmtDate(l.checked) : '현장 확인 기록 없음'}</li>`).join('')}</ul>
+            <span>${assisted ? '도움받아 이동' : '휠체어 혼자 이동'} 기준 · 시간은 초속 ${NAV.speed}m로 잡은 추정이에요.</span>
+          </div>
+        </details>`;
+
+        return `<p class="nav-summary">약 ${Math.max(10, Math.round(len / 10) * 10)}m <span>· 약 ${mins}분</span></p>
+          ${warns.length ? `<details class="nav-caution"${strong ? ' open' : ''}>
+            <summary>이동 시 유의사항 (${warns.length})</summary>
+            <ul>${warns.map(w => `<li${w.strong ? ' class="strong"' : ''}>${esc(w.t)}</li>`).join('')}</ul>
+          </details>` : ''}
+          <ol class="tl" aria-label="단계별 안내">${tl.join('')}</ol>
+          ${previewHtml(ref)}`;
+      }
+
+      function runNav(afterWait) {
+        clearNav();
+        const from = navFrom.value, to = navTo.value;
+        if (!from || !to) { navResult.innerHTML = ''; return; }
+        if (from === to) {
+          navResult.innerHTML = `<div class="nav-box nav-warn" role="alert"><b>출발과 도착이 같은 건물이에요.</b><span>다른 건물을 골라 주세요.</span></div>`;
+          return;
+        }
+        if (!edges.length) { navResult.innerHTML = failHtml('길 데이터를 불러오지 못했어요.'); return; }
+        // 현재 위치 출발인데 아직 위치가 없으면: 위치를 기다렸다가 다시 계산 (최대 몇 초)
+        // (기다린 뒤에도 위치가 없으면 '현재 위치를 확인하지 못했어요' 안내로 끝남)
+        if (from === HERE_ID && !hereFresh() && afterWait !== true && !hereDenied) {
+          navResult.innerHTML = '<p class="meta" role="status">현재 위치를 확인하는 중이에요…</p>';
+          const token = ++runNav.token;
+          waitHere(() => { if (runNav.token === token && navFrom.value === HERE_ID) runNav(true); });
+          return;
+        }
+        runNav.token = (runNav.token || 0) + 1;   // 기다리던 예전 계산은 무시
+        const assisted = navAssist.checked;
+        try {
+          const r = planRoute(from, to, assisted ? NAV.profiles.assisted : NAV.profiles.wheelchair);
+          if (r.fail) {
+            // 혼자 이동으로 못 찾았으면, 도움받아 이동으로는 갈 수 있는지 알려 줌
+            let hint = '';
+            if (!assisted && !r.hard && !planRoute(from, to, NAV.profiles.assisted).fail)
+              hint = "혼자 지나가기 어려운 구간을 거치면 갈 수 있어요. '도움받아 이동'을 켜면 그 경로를 볼 수 있어요.";
+            navResult.innerHTML = failHtml(r.fail, hint);
+            return;
+          }
+          lastRoute = r;
+          drawNav(r);
+          navResult.innerHTML = resultHtml(r, from, to, assisted);
+        } catch (err) {
+          navResult.innerHTML = failHtml('경로를 계산하는 중 문제가 생겼어요.');
+          console.error(err);
+        }
+      }
+
+      runNav.token = 0;
+
+      // ---------- 네이버 거리뷰로 경로 미리 보기 ----------
+      // 키는 CONFIG.naverKeyId (네이버 클라우드 Maps의 Client ID. Client Secret은 절대 넣지 않음)
+      // 이용 조건상 화면에는 '네이버 거리뷰'라고 씀 (로드뷰 등 다른 이름 금지)
+      // SDK는 '미리 보기' 버튼을 눌렀을 때만 불러옴 → 길찾기만 쓰는 사람은 네이버 이용량에 안 잡힘
+      let naverAuthFailed = false, naverSdk = null;
+      window.navermap_authFailure = () => {   // 네이버가 인증 실패 때 부르는 이름 (등록 안 된 주소 등)
+        naverAuthFailed = true;
+        const cap = $('nav-pv-cap');
+        if (cap) cap.textContent = '네이버 거리뷰 인증에 실패했어요. 네이버 클라우드 콘솔의 Web 서비스 URL에 지금 주소가 등록돼 있는지 확인해 주세요.';
+      };
+      function loadNaver(key) {
+        if (window.naver && naver.maps && naver.maps.Panorama) return Promise.resolve();
+        if (naverSdk) return naverSdk;
+        naverSdk = new Promise((resolve, reject) => {
+          if (!document.querySelector('script[data-naver-sdk]')) {
+            const s = document.createElement('script');
+            s.dataset.naverSdk = '1';
+            s.src = 'https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=' + encodeURIComponent(key) + '&submodules=panorama';
+            document.head.appendChild(s);
+          }
+          // 거리뷰(panorama) 모듈은 본체 뒤에 따로 오므로 생길 때까지 기다림 (최대 10초)
+          const t0 = Date.now();
+          const poll = setInterval(() => {
+            if (window.naver && naver.maps && naver.maps.Panorama) { clearInterval(poll); resolve(); }
+            else if (naverAuthFailed || Date.now() - t0 > 10000) { clearInterval(poll); reject(new Error(naverAuthFailed ? 'auth' : 'timeout')); }
+          }, 100);
+        }).catch(err => { naverSdk = null; throw err; });   // 실패하면 다음에 다시 시도할 수 있게
+        return naverSdk;
+      }
+
+      // 경로 선(입구–길 점선 제외)을 한 줄로 보고, 처음부터 잰 거리 s로 위치·방향 구하기
+      function trackOf(pts) {
+        const cum = [0];
+        for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+        return { pts, cum, total: cum[cum.length - 1] };
+      }
+      function pointAt(tr, s) {
+        s = Math.max(0, Math.min(tr.total, s));
+        for (let i = 1; i < tr.pts.length; i++) {
+          if (tr.cum[i] >= s && tr.cum[i] > tr.cum[i - 1]) {
+            const t = (s - tr.cum[i - 1]) / (tr.cum[i] - tr.cum[i - 1]);
+            const a = tr.pts[i - 1], b = tr.pts[i];
+            return { xy: [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], heading: bearingXY(a, b) };
+          }
+        }
+        const n = tr.pts.length;
+        return { xy: tr.pts[n - 1], heading: n > 1 ? bearingXY(tr.pts[n - 2], tr.pts[n - 1]) : 0 };
+      }
+      function alongOf(tr, p) {
+        let best = Infinity, at = 0;
+        for (let i = 1; i < tr.pts.length; i++) {
+          const r = proj(p, tr.pts[i - 1], tr.pts[i]);
+          if (r.d < best) { best = r.d; at = tr.cum[i - 1] + r.t * (tr.cum[i] - tr.cum[i - 1]); }
+        }
+        return at;
+      }
+      // 사진이 실제로 찍힌 자리(cam)에서 경로상 8m 앞을 바라보는 방향 (모퉁이·옆에서 찍힌 사진도 길 쪽을 보게)
+      function lookAt(tr, cam) {
+        const s = alongOf(tr, cam);
+        if (s + 8 > tr.total) return pointAt(tr, s).heading;
+        const ahead = pointAt(tr, s + 8).xy;
+        return dist(cam, ahead) < 2 ? pointAt(tr, s).heading : bearingXY(cam, ahead);
+      }
+
+      const pv = { tr: null, stops: [], i: 0, pano: null, token: 0, timer: 0, ro: null, ok: false, cam: null, raf: 0 };
+      // ---------- 거리뷰 위 이동 방향 띠 ----------
+      // 네이버 거리뷰 사진 위에, 앞으로 갈 경로를 바닥에 붙은 반투명 띠 + 흰 꺾쇠로 겹쳐 그림 (사진을 끌면 따라 움직임)
+      // camHeight: 촬영 카메라 높이(m), halfWidth: 띠 반폭(m), ahead: 몇 m 앞까지 그릴지
+      // (ahead를 너무 길게 하면 꺾인 뒤 건물 너머 길이 지평선에 비쳐 보여서 35m)
+      // maxShift: 손으로 그린 경로 선과 실제 길 가운데가 어긋난 만큼 띠를 카메라 발밑으로 옮기는 최대 거리(m)
+      const GUIDE = { camHeight: 2.0, halfWidth: 0.9, ahead: 35, step: 1.5, chevronEvery: 6, maxShift: 4 };
+      // 바닥의 한 점(평면 m)을 사진 화면의 픽셀 위치로 (일반 원근 투영). 카메라 뒤쪽이면 null
+      function projectToView(cam, pov, view, p) {
+        const d = dist(cam, p);
+        if (d < 0.01) return null;
+        const yaw = (bearingXY(cam, p) - pov.pan) * Math.PI / 180;
+        const right = d * Math.sin(yaw), fwd = d * Math.cos(yaw), up = -GUIDE.camHeight;
+        const t = pov.tilt * Math.PI / 180;            // 위를 보면 +
+        const depth = fwd * Math.cos(t) + up * Math.sin(t);
+        const up2 = -fwd * Math.sin(t) + up * Math.cos(t);
+        if (depth < 0.5) return null;
+        const f = (view.w / 2) / Math.tan(pov.fov * Math.PI / 360);   // fov = 가로 시야각
+        return [view.w / 2 + f * right / depth, view.h / 2 - f * up2 / depth];
+      }
+      function drawGuide() {
+        pv.raf = 0;
+        const svg = $('nav-pv-guide');
+        if (!svg) return;
+        if (!pv.ok || !pv.pano || !pv.cam) { svg.innerHTML = ''; return; }
+        const outer = svg.parentElement, view = { w: outer.clientWidth, h: outer.clientHeight };
+        if (!view.w || !view.h) return;
+        const pov = pv.pano.getPov(), cam = pv.cam, tr = pv.tr;
+        const rightOf = h => { const r = h * Math.PI / 180; return [Math.cos(r), -Math.sin(r)]; };
+        const fwdOf = h => { const r = h * Math.PI / 180; return [Math.sin(r), Math.cos(r)]; };
+        const s0 = alongOf(tr, cam), start = pointAt(tr, s0);
+        // 카메라가 경로 선에서 옆으로 떨어진 만큼 띠 전체를 옮김 (최대 ±maxShift)
+        const r0 = rightOf(start.heading);
+        const lat = Math.max(-GUIDE.maxShift, Math.min(GUIDE.maxShift,
+          (cam[0] - start.xy[0]) * r0[0] + (cam[1] - start.xy[1]) * r0[1]));
+        // 경로 위 점 p에서 오른쪽으로 off m, 뒤로 back m 옮긴 바닥 점
+        const at = (p, h, off, back = 0) => {
+          const r = rightOf(h), f = fwdOf(h);
+          return [p[0] + r[0] * (lat + off) - f[0] * back, p[1] + r[1] * (lat + off) - f[1] * back];
+        };
+        const end = Math.min(tr.total, s0 + GUIDE.ahead);
+        const L = [], R = [], chev = [];
+        for (let s = s0; s < end + GUIDE.step; s += GUIDE.step) {
+          const pt = pointAt(tr, Math.min(s, end));
+          const a = projectToView(cam, pov, view, at(pt.xy, pt.heading, -GUIDE.halfWidth));
+          const b = projectToView(cam, pov, view, at(pt.xy, pt.heading, GUIDE.halfWidth));
+          if (a && b) { L.push(a); R.push(b); }
+        }
+        for (let s = s0 + GUIDE.chevronEvery; s < end - 1; s += GUIDE.chevronEvery) {
+          const pt = pointAt(tr, s);
+          const v = [at(pt.xy, pt.heading, -0.55, 1), at(pt.xy, pt.heading, 0), at(pt.xy, pt.heading, 0.55, 1)]
+            .map(q => projectToView(cam, pov, view, q));
+          if (v.every(Boolean)) chev.push(v);
+        }
+        const P = arr => arr.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+        svg.setAttribute('viewBox', `0 0 ${view.w} ${view.h}`);
+        svg.innerHTML = (L.length > 1 ? `<polygon class="band" points="${P([...L, ...R.reverse()])}"/>` : '')
+          + chev.map(c => `<polyline class="chev" points="${P(c)}"/>`).join('');
+      }
+      const guideSoon = () => { if (!pv.raf) pv.raf = requestAnimationFrame(drawGuide); };
+
+      function previewHtml(ref) {
+        return `<section class="nav-pv" aria-label="경로 미리 보기">
+          <h3>경로 미리 보기</h3>
+          ${CONFIG.naverKeyId
+            ? `<button type="button" class="nav-pv-start" data-pv="start">네이버 거리뷰로 미리보기</button>
+               <div class="nav-pv-body" hidden>
+                 <div class="nav-pv-view"><div id="nav-pv-inner"></div><svg id="nav-pv-guide" class="nav-pv-guide" aria-hidden="true"></svg><p class="nav-pv-empty" hidden></p></div>
+                 <div class="nav-pv-bar">
+                   <button type="button" data-pv="prev">이전 지점</button>
+                   <span id="nav-pv-count"></span>
+                   <button type="button" data-pv="next">다음 지점</button>
+                 </div>
+                 <p class="pv-note">네이버 거리뷰 사진 위 버건디 띠는 앞으로 갈 방향이에요. 촬영 이후 바뀐 곳(경사로·자동문 등)이 있을 수 있어요.</p>
+               </div>
+               <p class="nav-pv-cap" id="nav-pv-cap" aria-live="polite"></p>`
+            : `<p class="pv-note">거리뷰 키가 설정되지 않아 미리 보기를 쓸 수 없어요.</p>`}
+          ${ref}
+        </section>`;
+      }
+      function pvDestroy() {
+        pv.token++;
+        clearTimeout(pv.timer);
+        cancelAnimationFrame(pv.raf);
+        pv.raf = 0;
+        pv.ok = false;
+        pv.cam = null;
+        if (pv.ro) { pv.ro.disconnect(); pv.ro = null; }
+        if (pv.pano) { try { pv.pano.destroy(); } catch (e) { /* 이미 사라짐 */ } pv.pano = null; }
+        pinEye.remove();
+      }
+      async function pvStart(btn) {
+        if (!lastRoute) return;
+        btn.disabled = true;
+        $('nav-pv-cap').textContent = '네이버 거리뷰를 불러오는 중이에요…';
+        try {
+          await loadNaver(CONFIG.naverKeyId);
+        } catch (err) {
+          btn.disabled = false;
+          $('nav-pv-cap').textContent = err.message === 'auth'
+            ? '네이버 거리뷰 인증에 실패했어요. 등록된 주소에서만 볼 수 있어요.'
+            : '네이버 거리뷰를 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.';
+          return;
+        }
+        if (!lastRoute || !document.contains(btn)) return;   // 기다리는 사이 경로가 바뀜
+        btn.hidden = true;
+        document.querySelector('.nav-pv-body').hidden = false;
+        // 경로 위 previewEveryM 간격 지점 (끝 지점 보충)
+        pv.tr = trackOf(lastRoute.pts);
+        pv.stops = [];
+        for (let s = 0; s < pv.tr.total; s += NAV.previewEveryM) pv.stops.push({ s, ...pointAt(pv.tr, s) });
+        if (!pv.stops.length || pv.tr.total - pv.stops[pv.stops.length - 1].s > 5) pv.stops.push({ s: pv.tr.total, ...pointAt(pv.tr, pv.tr.total) });
+        pvShow(0);
+      }
+      function pvShow(i) {
+        pv.i = i;
+        pv.ok = false;   // 새 지점 사진이 확인될 때까지 띠를 그리지 않음
+        guideSoon();
+        const st = pv.stops[i], tok = ++pv.token;
+        $('nav-pv-count').textContent = `${i + 1} / ${pv.stops.length}`;
+        document.querySelector('[data-pv="prev"]').disabled = i === 0;
+        document.querySelector('[data-pv="next"]').disabled = i === pv.stops.length - 1;
+        $('nav-pv-cap').textContent = `지점 ${i + 1} · 출발에서 약 ${Math.round(st.s)}m · 불러오는 중…`;
+        pinEye.setLngLat(toLL(st.xy)).setRotation(st.heading).addTo(map);
+        eyeEl.style.display = currentTab === 'route' ? '' : 'none';
+        clearTimeout(pv.timer);
+        pv.timer = setTimeout(() => { if (pv.token === tok) pvEmpty('네이버 거리뷰를 불러오지 못했어요.'); }, 4000);
+        const [lng, lat] = toLL(st.xy);
+        const pos = new naver.maps.LatLng(lat, lng);
+        if (!pv.pano) {
+          const inner = $('nav-pv-inner'), outer = inner.parentElement;
+          pv.pano = new naver.maps.Panorama(inner, {
+            position: pos, pov: { pan: st.heading, tilt: 0, fov: 100 },
+            size: new naver.maps.Size(outer.clientWidth, outer.clientHeight)
+          });
+          naver.maps.Event.addListener(pv.pano, 'pano_status', status => pvStatus(status, pv.token));
+          naver.maps.Event.addListener(pv.pano, 'pov_changed', () => {
+            if (pv.pano && !$('nav-pv-inner').classList.contains('off')) pinEye.setRotation(pv.pano.getPov().pan);
+            guideSoon();   // 사진을 끌면 띠도 따라 움직임
+          });
+          // 사진 안 화살표로 옆 지점으로 옮겨 가면 카메라 위치를 다시 읽음
+          naver.maps.Event.addListener(pv.pano, 'pano_changed', () => {
+            if (!pv.ok || !pv.pano) return;
+            const c = pv.pano.getPosition();
+            pv.cam = toXY([c.lng(), c.lat()]);
+            pinEye.setLngLat(toLL(pv.cam));
+            guideSoon();
+          });
+          // 네이버는 받은 요소에 자기 크기를 써 넣으므로, 크기는 바깥 칸에서 재서 알려 줌
+          pv.ro = new ResizeObserver(() => {
+            if (pv.pano && outer.clientWidth) pv.pano.setSize(new naver.maps.Size(outer.clientWidth, outer.clientHeight));
+            guideSoon();
+          });
+          pv.ro.observe(outer);
+        } else {
+          pv.pano.setPosition(pos);
+        }
+      }
+      function pvEmpty(msg) {
+        clearTimeout(pv.timer);
+        pv.ok = false;
+        guideSoon();
+        $('nav-pv-inner').classList.add('off');   // 앞 지점 사진이 남아 헷갈리지 않게 가림
+        const empty = document.querySelector('.nav-pv-empty');
+        empty.textContent = msg;
+        empty.hidden = false;
+        const st = pv.stops[pv.i];
+        $('nav-pv-cap').textContent = `지점 ${pv.i + 1} · 출발에서 약 ${Math.round(st.s)}m · ${msg}`;
+      }
+      function pvStatus(status, tok) {
+        if (tok !== pv.token || !pv.pano) return;   // 예전 지점의 늦은 응답은 무시
+        clearTimeout(pv.timer);
+        const st = pv.stops[pv.i];
+        if (status !== 'OK') { pvEmpty('이 지점 가까이에는 네이버 거리뷰가 없어요.'); return; }
+        const c = pv.pano.getPosition();
+        const cam = toXY([c.lng(), c.lat()]);
+        if (dist(cam, st.xy) > NAV.previewMaxM) { pvEmpty(`가장 가까운 네이버 거리뷰가 ${NAV.previewMaxM}m보다 멀어 보여 주지 않아요.`); return; }
+        $('nav-pv-inner').classList.remove('off');
+        document.querySelector('.nav-pv-empty').hidden = true;
+        const pan = lookAt(pv.tr, cam);
+        pv.pano.setPov({ pan, tilt: 0, fov: 100 });
+        pinEye.setLngLat(toLL(cam)).setRotation(pan);
+        pv.cam = cam;
+        pv.ok = true;
+        guideSoon();
+        // 촬영 시기: 오래된 사진이면 지금 모습과 다를 수 있다고 알림
+        const loc = pv.pano.getLocation && pv.pano.getLocation();
+        const d = loc && parseDate(loc.photodate);
+        let when = '';
+        if (d) {
+          const years = Math.floor((Date.now() - d) / (365.25 * 86400000));
+          when = ` · 네이버 거리뷰 촬영 ${d.getFullYear()}년 ${d.getMonth() + 1}월`
+            + (years >= 5 ? ` · ${years}년 전 사진이라 지금 모습(경사로·자동문 등)과 다를 수 있어요` : '');
+        }
+        $('nav-pv-cap').textContent = `지점 ${pv.i + 1} · 출발에서 약 ${Math.round(st.s)}m${when}`;
+      }
+      navResult.addEventListener('click', e => {
+        const b = e.target.closest('[data-pv]');
+        if (!b) return;
+        if (b.dataset.pv === 'start') pvStart(b);
+        else if (b.dataset.pv === 'prev' && pv.i > 0) pvShow(pv.i - 1);
+        else if (b.dataset.pv === 'next' && pv.i < pv.stops.length - 1) pvShow(pv.i + 1);
+      });
+
+      // ⑤ 길찾기 탭에서 지도를 누르면: 출발이 비었으면 출발, 아니면 도착으로
+      function navPick(id) {
+        if (!navFrom.value) navFrom.value = id;
+        else if (navFrom.value !== id) navTo.value = id;
+        runNav();
+      }
+      // 건물 패널의 '이 건물로 안내하기' 버튼: 길찾기 탭으로 가서 도착을 그 건물로
+      navOpenTo = id => {
+        setTab('route');
+        navTo.value = id;
+        // 출발은 항상 현재 위치 (위치를 아직 모르면 runNav가 권한을 묻고 몇 초 기다렸다 계산)
+        // 위치 기능이 없거나 권한을 거절한 경우에만 기본 출발(defaultFrom)로
+        if (navigator.geolocation && !hereDenied) navFrom.value = HERE_ID;
+        else if (!navFrom.value && byId[NAV.defaultFrom] && NAV.defaultFrom !== id) navFrom.value = NAV.defaultFrom;
+        runNav();
+        // 화면 읽기 프로그램이 결과를 읽도록 한 박자 뒤에 포커스
+        requestAnimationFrame(() => navFrom.focus({ preventScroll: true }));
+      };
+      [navFrom, navTo, navAssist].forEach(el => el.addEventListener('change', runNav));
+      $('nav-swap').addEventListener('click', () => {
+        if (navFrom.value === HERE_ID) { navFrom.value = navTo.value; navTo.value = ''; }   // 현재 위치는 출발에만 있음
+        else [navFrom.value, navTo.value] = [navTo.value, navFrom.value];
+        runNav();
+      });
+      $('nav-clear').addEventListener('click', () => {
+        navFrom.value = '';
+        navTo.value = '';
+        runNav();
+        navFrom.focus();
+      });
+      // 탭을 바꾸면 경로 선·핀을 보이거나 숨김 (경로는 지우지 않아 다시 오면 그대로)
+      onTabChange = () => {
+        ['nav-casing', 'nav-line', 'nav-connector'].forEach(l => map.setLayoutProperty(l, 'visibility', vis()));
+        setFocus(currentTab === 'route' ? navFocus : null);
+        [pinFrom, pinTo, pinEye].forEach(m => { m.getElement().style.display = currentTab === 'route' ? '' : 'none'; });
+      };
+      // [점검용] 길찾기에 못 쓰는 입구를 콘솔(F12)에 알려 줌 → 길을 더 그리거나 입구 좌표·수준 확인
+      setTimeout(() => facilities
+        .filter(f => f.type === '입구' && f.lng && f.lat)
+        .forEach(f => {
+          const e = entranceLevel(f);
+          if (e.lv === '어려움') console.info(`[길찾기] 입구 ${f.facility_id} (${f.building_id})는 '어려움'${e.est ? '(설명 글로 추정)' : ''}이라 안내에서 빠져요.`);
+          else if (!attach(toXY([Number(f.lng), Number(f.lat)]), NAV.profiles.assisted))
+            console.warn(`[길찾기] 입구 ${f.facility_id} (${f.building_id})는 이용할 수 있는 길에서 너무 멀어 경로에 못 써요.`);
+        }));
+      // 출발 목록의 '현재 위치' 글자만 바꿈 (그려진 경로는 15초마다 다시 계산하지 않음: 다시 고르면 새 위치로 계산)
+      updateHereOption = () => {
+        const opt = navFrom.querySelector(`option[value="${HERE_ID}"]`);
+        if (!opt || !here) return;
+        const near = nearBuilding(here.xy);
+        opt.textContent = near ? `현재 위치 (${near} 근처)` : '현재 위치';
+      };
+      // ==================== 길찾기 끝 ====================
+
+      // ==================== 현재 위치 ====================
+      // 파란 점 + 위치 오차 원. 위치는 이 기기 화면에만 쓰고 어디에도 저장하거나 보내지 않음
+      // 권한은 '내 위치' 버튼을 눌렀을 때만 물음 (이미 허용한 사람은 처음부터 표시)
+      // 15초마다 다시 확인, 다른 앱·탭을 보는 동안은 멈춤
+      const HERE = {
+        intervalMs: 15000,   // 위치 다시 확인 간격
+        maxAgeMs: 120000,    // 이보다 오래된 위치는 길찾기 출발로 안 씀 (2분)
+        maxAccuracyM: 100,   // 오차가 이보다 크면 길찾기 출발로 안 씀
+        warnAccuracyM: 30,   // 오차가 이보다 크면 길찾기 결과에 경고
+        campusRadiusM: 700,  // 캠퍼스 중심에서 이 안일 때만 '내 위치' 버튼이 지도를 옮김
+        waitMs: 8000         // 길찾기에서 위치를 기다리는 최대 시간
+      };
+      const CAMPUS_C = toXY([127.01716, 37.65142]);
+      let hereOn = false, hereBusy = false, hereDenied = false, hereTimer = 0, flyWhenFound = false;
+      const hereWaiters = [];
+
+      map.addSource('me-acc', { type: 'geojson', data: EMPTY });
+      map.addLayer({ id: 'me-accuracy', source: 'me-acc', type: 'fill', paint: { 'fill-color': '#1f6feb', 'fill-opacity': 0.12 } }, 'entrance-halo');
+      map.addLayer({ id: 'me-accuracy-line', source: 'me-acc', type: 'line', paint: { 'line-color': '#1f6feb', 'line-opacity': 0.45, 'line-width': 1 } }, 'entrance-halo');
+      const meEl = document.createElement('div');
+      meEl.className = 'me-dot';
+      meEl.setAttribute('aria-hidden', 'true');
+      const meMarker = new maplibregl.Marker({ element: meEl });
+
+      function circleLL(c, r, n = 40) {
+        const ring = [];
+        for (let i = 0; i <= n; i++) {
+          const a = 2 * Math.PI * i / n;
+          ring.push(toLL([c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)]));
+        }
+        return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } };
+      }
+      // 가장 가까운 건물 이름 (150m 안에 없으면 빈 글자)
+      function nearBuilding(xy) {
+        let best = null;
+        geo.features.forEach(g => {
+          if (!g.geometry) return;
+          const polys = g.geometry.type === 'Polygon' ? [g.geometry.coordinates] : g.geometry.type === 'MultiPolygon' ? g.geometry.coordinates : [];
+          polys.forEach(poly => {
+            const ring = poly[0].map(toXY);
+            for (let i = 0; i < ring.length - 1; i++) {
+              const r = proj(xy, ring[i], ring[i + 1]);
+              if (!best || r.d < best.d) best = { d: r.d, id: g.properties.building_id };
+            }
+          });
+        });
+        return best && best.d < 150 ? bName(best.id) : '';
+      }
+      hereFresh = () => !!(here && Date.now() - here.t <= HERE.maxAgeMs && here.acc <= HERE.maxAccuracyM);
+      const onCampus = () => !!(here && dist(here.xy, CAMPUS_C) <= HERE.campusRadiusM);
+
+      function flyToHere() {
+        if (!here) return;
+        if (!onCampus()) { showStatus('지금 위치가 캠퍼스 밖이라 지도를 옮기지 않았어요.'); return; }
+        map.easeTo({ center: toLL(here.xy), zoom: Math.max(map.getZoom(), 17.5), duration: reduceMotion ? 0 : 700 });
+      }
+      function onPosition(p) {
+        hereBusy = false;
+        here = { xy: toXY([p.coords.longitude, p.coords.latitude]), acc: p.coords.accuracy, t: Date.now() };
+        meMarker.setLngLat(toLL(here.xy)).addTo(map);
+        map.getSource('me-acc').setData(circleLL(here.xy, Math.min(here.acc, 300)));
+        updateHereOption();
+        if (flyWhenFound) { flyWhenFound = false; flyToHere(); }
+        hereWaiters.splice(0).forEach(fn => fn());
+      }
+      function onPositionError(err) {
+        hereBusy = false;
+        if (err.code === 1) {   // 권한 거부: 다시 묻지 않음
+          hereDenied = true;
+          stopHere();
+          showStatus('위치 권한이 꺼져 있어요. 브라우저 설정에서 허용하면 내 위치를 볼 수 있어요.');
+        } else if (flyWhenFound) {
+          flyWhenFound = false;
+          showStatus('지금 위치를 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.');
+        }
+        hereWaiters.splice(0).forEach(fn => fn());
+      }
+      function pollHere() {
+        if (hereBusy || document.hidden || !hereOn) return;   // 앞 요청을 기다리는 중이거나 화면을 안 보면 건너뜀
+        hereBusy = true;
+        navigator.geolocation.getCurrentPosition(onPosition, onPositionError,
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 });
+      }
+      startHere = () => {
+        if (hereOn || hereDenied || !navigator.geolocation) return;
+        hereOn = true;
+        pollHere();
+        hereTimer = setInterval(pollHere, HERE.intervalMs);
+      };
+      function stopHere() {
+        hereOn = false;
+        clearInterval(hereTimer);
+      }
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) pollHere(); });
+      // 위치를 기다렸다가 할 일 (최대 waitMs, 위치가 오든 안 오든 한 번만 실행)
+      waitHere = fn => {
+        let done = false;
+        const once = () => { if (!done) { done = true; fn(); } };
+        hereWaiters.push(once);
+        setTimeout(once, HERE.waitMs);
+        startHere();
+        if (hereOn) pollHere();
+      };
+      // 이미 위치 권한을 허용한 사람은 처음부터 표시
+      if (navigator.permissions && navigator.geolocation) {
+        navigator.permissions.query({ name: 'geolocation' })
+          .then(r => { if (r.state === 'granted') startHere(); })
+          .catch(() => { /* 지원하지 않는 브라우저 */ });
+      }
+
+      // '내 위치' 버튼: 오른쪽 아래 버튼 묶음 맨 위
+      class LocateControl {
+        onAdd() {
+          this.box = document.createElement('div');
+          this.box.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'locate-btn';
+          btn.title = '내 위치 보기';
+          btn.setAttribute('aria-label', '내 위치 보기');
+          btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+          btn.addEventListener('click', () => {
+            if (!navigator.geolocation) { showStatus('이 브라우저는 위치 확인을 지원하지 않아요.'); return; }
+            if (hereDenied) { showStatus('위치 권한이 꺼져 있어요. 브라우저 설정에서 허용해 주세요.'); return; }
+            if (here && Date.now() - here.t < HERE.intervalMs) { flyToHere(); return; }
+            flyWhenFound = true;
+            if (!hereOn) {
+              showStatus('위치는 이 기기 화면에만 쓰고 어디에도 저장하지 않아요.');
+              startHere();
+            } else pollHere();
+          });
+          this.box.appendChild(btn);
+          return this.box;
+        }
+        onRemove() { this.box.remove(); }
+      }
+      map.addControl(new LocateControl(), 'bottom-right');
+      // ==================== 현재 위치 끝 ====================
+
 
       map.on('mouseenter', 'buildings-3d', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'buildings-3d', () => { map.getCanvas().style.cursor = ''; });
