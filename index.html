@@ -12,7 +12,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>덕성여대 배리어프리 캠퍼스 맵</title>
+  <title>웹 배리어프리맵</title>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
@@ -2222,9 +2222,15 @@
       margin: 0 0 10px;
     }
 
+    /* 시설 사진: 카드 너비를 꽉 채우는 4:3 (가로 사진이 크게, 세로 사진은 잘리지 않게 양옆을 비움) */
     .fc-body .photo img {
-      height: 220px;
+      height: auto;
+      aspect-ratio: 4 / 3;
       object-fit: contain;
+    }
+
+    .fc-body .gallery .photo {
+      flex-basis: 92%;
     }
 
     .kv {
@@ -2737,6 +2743,294 @@
         font-weight: 600;
       }
     }
+
+    /* ==================== 소식 탭 ==================== */
+    #news-view {
+      position: fixed;
+      top: var(--top-h);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 18;
+      overflow-y: auto;
+      background: #f7f8f7;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(37, 37, 37, .25) transparent;
+    }
+
+    body[data-tab="news"] #legend,
+    body[data-tab="news"] #status {
+      display: none;
+    }
+
+    #news-view h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    #news-view h2:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+
+    .nv-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .nv-meta .date {
+      font-weight: 700;
+    }
+
+    .nv-bld {
+      padding: 1px 10px;
+      border-radius: 12px;
+      background: var(--wash);
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .nv-new,
+    .tab-dot {
+      background: var(--brand);
+      color: #ffffff;
+    }
+
+    .nv-new {
+      padding: 1px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .nv-card h3 {
+      margin: 8px 0 4px;
+      font-size: 18px;
+    }
+
+    /* 공지 보기: 길찾기 '다시 고르기'와 같은 파란 글자 + 밑줄 (테두리 없는 글자 링크) */
+    a.nv-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 40px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: #1a49e6;
+      font: 600 15px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* 소식 탭에서 '지도에서 보기'로 연 소식: 건물 패널 맨 위 (선택한 입구 카드처럼 버건디 테두리) */
+    .news-latest.focus-news {
+      border: 2px solid var(--select);
+      border-left-width: 4px;
+    }
+
+    @media (max-width: 700px) {
+      #news-view .lv-wrap {
+        padding-top: 20px;   /* 소식 탭엔 오른쪽 위 지도/목록 버튼이 없음 */
+      }
+    }
+
+    a.nv-link:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    /* 소식 탭 이름 옆 빨간 점: 아직 안 본 새 소식이 있을 때 */
+    .tab-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: none;
+      align-self: flex-start;
+      margin: 16px 0 0 -4px;
+    }
+
+    @media (max-width: 700px) {
+      .tab-dot {
+        margin-top: 12px;
+      }
+    }
+
+    /* 처음 들어왔을 때 새 소식 알림 (PC: 위 가운데, 휴대폰: 아래) */
+    .news-toast {
+      position: fixed;
+      z-index: 26;
+      top: calc(var(--top-h) + 16px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(520px, calc(100vw - 24px));
+      display: grid;
+      gap: 6px;
+      padding: 14px 16px 12px 18px;
+      border-left: 5px solid var(--brand);
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .2);
+    }
+
+    .nt-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--brand);
+    }
+
+    .nt-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.45;
+      word-break: keep-all;
+    }
+
+    .nt-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .nt-actions button {
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 10px;
+      font: 600 15px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    #nt-open {
+      border: 0;
+      background: var(--brand);
+      color: #ffffff;
+    }
+
+    #nt-close {
+      border: 1px solid #c9cecb;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    /* 지도 탭의 지도 보기에서만 (패널·길찾기 카드·목록이 열리면 잠시 숨김) */
+    body:not([data-tab="map"]) .news-toast,
+    body[data-view="list"] .news-toast,
+    body.panel-open .news-toast {
+      display: none;
+    }
+
+    @media (max-width: 700px) {
+      .news-toast {
+        top: auto;
+        bottom: 72px;   /* 접힌 범례 위 */
+      }
+    }
+
+    /* ==================== 길찾기 카드 접기 ==================== */
+    .rv-head {
+      padding-right: 120px;
+    }
+
+    .rv-collapse {
+      position: absolute;
+      top: -6px;
+      right: 40px;
+      min-width: 64px;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid #c9cecb;
+      border-radius: 18px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 600 14px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    @media (max-width: 700px) {
+      .rv-collapse {
+        height: 40px;
+        top: -6px;
+      }
+
+      #route-view {
+        max-height: 55vh;
+        max-height: 55dvh;
+      }
+    }
+
+    /* 접으면: 제목 + 출발→도착 + 거리·시간만 (어려움 구간 경고는 접어도 보이게) */
+    #route-view.collapsed .nav-form,
+    #route-view.collapsed #nav-info,
+    #route-view.collapsed #nav-result > *:not(.nav-summary):not(.nav-mini):not(.nav-caution[open]) {
+      display: none;
+    }
+
+    #route-view.collapsed #nav-result:not(:empty) {
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+
+    #route-view.collapsed .nav-summary {
+      margin-bottom: 4px;
+    }
+
+    .nav-mini {
+      display: none;
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--muted);
+      word-break: keep-all;
+    }
+
+    #route-view.collapsed .nav-mini {
+      display: block;
+    }
+
+    /* ==================== 장애인 주차구역 마커 ==================== */
+    .park-marker {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 2px solid #ffffff;
+      border-radius: 8px;
+      background: #1f5fbf;
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font: 800 16px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+    }
+
+    .park-marker.is-selected {
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--select);
+    }
+
+    .park-marker .cafe-ripple {
+      border-radius: 10px;
+    }
+
+    .legend-park {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      background: #1f5fbf;
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      flex: none;
+      font-size: 11px;
+      font-weight: 800;
+    }
   </style>
 </head>
 
@@ -2748,8 +3042,7 @@
         <!-- 로고는 CONFIG.logo 파일이 있을 때만 보임 -->
         <img id="brand-logo" alt="덕성여자대학교" hidden />
         <span class="brand-text">
-          <b>배리어프리 캠퍼스 맵</b>
-          <small>덕성여자대학교 장애학생지원센터</small>
+          <b>덕성여자대학교 배리어프리맵</b>
         </span>
       </a>
     </header>
@@ -2773,6 +3066,12 @@
           <path d="M12 2l9 5v10l-9 5-9-5V7z" />
           <path d="M3 7l9 5 9-5M12 12v10" />
         </svg>상세 캠퍼스</button>
+      <button class="tab" role="tab" data-tab="news" aria-selected="false" aria-controls="news-view" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+        </svg>소식<span class="tab-dot" hidden></span></button>
     </nav>
   </div>
 
@@ -2807,6 +3106,7 @@
         <path d="M11.5 30H22a5.5 5.5 0 0 0 0-11h-6a5.5 5.5 0 0 1 0-11h12.5" />
       </svg>
       <h2>길 찾기</h2>
+      <button id="nav-collapse" class="rv-collapse" type="button" aria-expanded="true" aria-controls="route-view">접기</button>
       <button id="nav-info-btn" class="rv-info" type="button" aria-label="길 찾기 안내 보기" aria-expanded="false" aria-controls="nav-info">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
@@ -2868,6 +3168,28 @@
     </div>
   </section>
 
+  <!-- 소식 탭: 시트 news 탭의 변경 소식을 최근 순으로 (CONFIG.tabs.news로 켜고 끔) -->
+  <section id="news-view" role="tabpanel" aria-labelledby="news-title" hidden>
+    <div class="lv-wrap">
+      <header>
+        <h2 id="news-title" tabindex="-1">변경 소식</h2>
+        <p class="meta">캠퍼스 접근성 시설이 바뀐 내용을 최근 순으로 모았어요.</p>
+      </header>
+      <p id="nv-status" class="lv-status" role="status" aria-live="polite">소식을 불러오는 중이에요…</p>
+      <ul id="nv-list" class="lv-list"></ul>
+    </div>
+  </section>
+
+  <!-- 처음 들어왔을 때 새 소식 알림 (안 본 새 소식이 있을 때만, 닫으면 같은 소식으로는 다시 안 뜸) -->
+  <div id="news-toast" class="news-toast" role="status" hidden>
+    <span class="nt-label">새 소식</span>
+    <p id="nt-title" class="nt-title"></p>
+    <div class="nt-actions">
+      <button type="button" id="nt-close">닫기</button>
+      <button type="button" id="nt-open">소식 보기</button>
+    </div>
+  </div>
+
   <!-- 상세 캠퍼스 탭: 3D 모델을 넣기 전까지 안내만 (CONFIG.tabs.detail로 켜고 끔) -->
   <section id="detail-view" role="tabpanel" aria-label="상세 캠퍼스" hidden>
     <div>
@@ -2910,7 +3232,11 @@
       // (홍보실에서 버건디 바탕용·투명 배경 로고를 받으면 false로)
       logoOnWhite: true,
       // 탭 켜고 끄기: 아직 완성 안 된 탭은 false로 두고 Push (false면 탭 버튼 자체가 사라짐)
-      tabs: { route: true, detail: false },
+      tabs: { route: true, news: true, detail: false },
+      newsNewDays: 30,  // 소식 날짜가 이 기간(일) 안이면 '새 소식'으로 표시하고, 처음 들어올 때 알림을 띄움
+      // 휴대폰에서 처음 들어왔을 때 보이는 화면 (손으로 확대하지 않아도 주요 건물이 크게 보이게)
+      // 바꾸는 법: 주소 뒤에 ?pick 을 붙여 열고, 원하는 화면으로 맞추면 위쪽 쪽지에 center·zoom 값이 나옴
+      mobileView: { center: [127.0160, 37.6527], zoom: 16.8 },
       // 길찾기(시범 기능) 기준. 바꾸면 보고서 기준표 설명도 함께 고칠 것
       nav: {
         // 길 수준별 부담: 숫자가 클수록 돌아가더라도 피함. 목록에 없는 수준은 아예 지나가지 않음
@@ -2924,6 +3250,12 @@
         snapM: 1,           // 길 끝이 다른 길에 이만큼(m) 안으로 닿아 있으면 이어진 것으로 봄 (그림 오차)
         entranceMaxM: 30,   // 입구에서 길까지 이보다 멀면 그 입구는 쓰지 않음 (m)
         bypassSlackM: 10,   // 가장 가까운 길보다 이만큼 넘게 먼 길로는 입구를 잇지 않음 (어려움 길 건너뛰기 방지)
+        // 길찾기에서 빼는 입구. 지도·패널·목록에는 그대로 보임
+        //  - 건물 도형의 안마당(중정, 도서관처럼 가운데가 뚫린 곳) 안이나 그 테두리 courtyardM(m) 안의 입구는 자동으로 뺌
+        //    (바깥 길에서 건물을 가로질러 중정 문까지 직선으로 잇지 않게)
+        //  - 그 밖에 빼고 싶은 입구는 facility_id를 적기. 예) excludeEntrances: ['E24']
+        courtyardM: 3,
+        excludeEntrances: [],
         speed: 0.8,         // 예상 시간 계산용 휠체어 속도 (m/초)
         defaultFrom: 'main_admin',   // 건물 패널에서 길찾기를 열 때 기본 출발
         previewEveryM: 25,  // 거리뷰 미리 보기 지점 간격 (m)
@@ -2933,14 +3265,13 @@
       // 콘솔의 Web 서비스 URL에 등록한 주소에서만 동작하게 막는 방식으로 보호함
       // Client Secret은 어디에도 넣지 말 것. 센터로 이관하면 센터 계정에서 새로 받아 바꿔 넣기
       naverKeyId: '7nn8y95c1l',
-      centerContact: '',            // 경로가 없을 때 함께 보여 줄 센터 연락처 (예: '02-000-0000'). 비우면 안 보임
       // 카페 마크 이미지 (예: 'icons/cafe.png'). 비워 두면 기본 컵 그림 동그라미를 씀
       // 배경이 투명한 PNG나 SVG 권장, 화면에는 36px로 보이니 원본은 96px 이상
       cafeIcon: 'icons/cafe-badge-192.png',
       // 입구 점과 겹치는 카페만 위로 올리기: { 시트 facility_id: 올릴 높이(px) }. 올린 카페는 아래로 짧은 선이 이어짐
       // 예) cafeLift: { 'C01': 26 }
       cafeLift: { 'C01': 10, 'C02': 20 },
-      recentDays: 90,   // 최종 확인일이 이 기간 안이면 '최근 확인' 배지 (한 학기+방학 기준)
+      recentDays: 90,   // 길찾기: 지나가는 길의 현장 확인이 이 기간(일)보다 오래되면 유의사항에 알림 (한 학기+방학 기준)
       keepStatus: false, // true면 상태 메시지 계속 표시 + 지도 누르면 좌표 복사 (점검용, 평소엔 false)
       // 좌표 따기는 keepStatus를 바꾸지 않아도 주소 뒤에 ?pick 을 붙이면 켜짐
       // 예) https://hyelynkim21.github.io/duksung-barrierfree-map/?pick  (센터에서 입구·카페 좌표를 찍을 때도 이 주소 사용)
@@ -2969,16 +3300,19 @@
     };
 
     // 입구에서의 접근성 수준 뜻 (시트 facilities의 access_level 열, 입구 행에만. 색은 LEVELS 색)
+    // 이 문장은 수준의 '판정 기준'이지 그 입구의 실제 설비가 아님 → 화면에서는 '판정 기준'으로 표시하고,
+    // 실제 설비(경사로·자동문 등)는 시트 equipment 열 그대로 따로 보여 줌
     const ENTRANCE_DESC = {
-      '원활': '휠체어로 혼자 들어갈 수 있음 (경사로 또는 턱 없음, 자동문)',
-      '일부 제약': '들어갈 수 있지만 도움이나 주의가 필요함 (일반문, 좁은 경사로 등)',
-      '어려움': '휠체어로 들어갈 수 없음 (계단만 있음 등)',
+      '원활': '자동문이 있고, 턱이 없거나 경사로가 있어 휠체어로 혼자 드나들 수 있음',
+      '일부 제약': '경사로(또는 평지)로 드나들 수 있지만 일반문이라 도움이나 주의가 필요함',
+      '어려움': '계단만 있는 등 휠체어로 드나들기 어려움',
       '정보 없음': '현장에서 확인하지 않음'
     };
+    const entCrit = lv => lv === '정보 없음' ? ENTRANCE_DESC[lv] : '판정 기준: ' + ENTRANCE_DESC[lv];
 
     // 패널에 시설을 보여 줄 순서 (목록에 없는 새 종류는 맨 뒤에 자동으로 붙음)
     const TYPE_ORDER = ['입구', '화장실', '엘리베이터', '경사로', '자동문', '주차', '편의시설', '카페'];
-    const TYPE_TITLES = { '입구': '입구', '화장실': '장애인 화장실' };
+    const TYPE_TITLES = { '입구': '입구', '화장실': '장애인 화장실', '주차': '장애인 주차구역' };
     // =================================================================================
 
     const $ = id => document.getElementById(id);
@@ -3229,7 +3563,7 @@
         ? `<img src="${esc(photoSrc(photos[0].file))}" alt="" loading="lazy" onerror="this.remove()">`
         : '';
       const title = f.location_desc || TYPE_TITLES[f.type] || f.type || '시설';
-      const line = f.equipment || f.directions || (isEnt ? ENTRANCE_DESC[lv] : '');
+      const line = f.equipment || f.directions || '';   // 실제 설비·가는 길만 (판정 기준 문장은 펼친 뒤에)
       const fc = parseDate(f.last_checked);
       const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : '';
       return `<details class="fcard${opts.focus ? ' focus' : ''}" name="fac-card" data-fid="${esc(f.facility_id)}"${opts.open ? ' open' : ''}>
@@ -3246,7 +3580,7 @@
         <div class="fc-body">
           ${photoHtml(photos)}
           <dl class="kv">
-            ${isEnt ? row('휠체어 출입', `${lvChip(lv)} <span class="kv-sub">${esc(ENTRANCE_DESC[lv])}</span>`) : ''}
+            ${isEnt ? row('휠체어 출입', `${lvChip(lv)} <span class="kv-sub">${esc(entCrit(lv))}</span>`) : ''}
             ${row('가는 길', esc(f.directions))}
             ${row('설비', esc(f.equipment))}
             ${row('참고', esc(f.note))}
@@ -3267,14 +3601,13 @@
     // 현장 확인 카드 (연회색 작은 카드)
     function checkedCard(dateStr, note) {
       const d = parseDate(dateStr);
-      const recent = d && (Date.now() - d) / 86400000 <= CONFIG.recentDays;
       return `<div class="checked-card checked">
-        <span>${d ? `최종 현장 확인 <b>${fmtDate(d)}</b>` : '현장 확인 기록 없음'}${recent ? '<span class="badge">최근 확인</span>' : ''}</span>
+        <span>${d ? `최종 현장 확인 <b>${fmtDate(d)}</b>` : '현장 확인 기록 없음'}</span>
         ${note ? `<span class="cc-note">${esc(note)}</span>` : ''}
       </div>`;
     }
 
-    function openPanel(b, facs, news, bldPhotos, photosByFac, focusId) {
+    function openPanel(b, facs, news, bldPhotos, photosByFac, focusId, focusNews) {
       const level = LEVELS[b.access_level] ? b.access_level : '정보 없음';
       // 입구·카페 마커로 열었으면 그 시설을 패널 맨 위에 펼쳐서 보여 줌
       const focusFac = focusId ? facs.find(f => f.facility_id === focusId) : null;
@@ -3300,6 +3633,7 @@
       let html = `<h2>${esc(b.name || b.building_id)}</h2>
         <div class="bld-level">${lvChip(level, true)}<span class="meta">${LEVELS[level].desc}</span></div>
         ${focusFac ? `<div class="top-entrance">${facCardHtml(focusFac, photosByFac, { open: true, focus: true })}</div>` : ''}
+        ${focusNews ? `<div class="top-entrance news-latest news focus-news"><span class="label">선택한 소식</span>${newsHtml(focusNews)}</div>` : ''}
         ${photoHtml(bldPhotos)}
         ${sumRows ? `<dl class="acc-sum" aria-label="접근성 정보 요약">${sumRows}</dl>` : ''}
         ${b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''}
@@ -3308,7 +3642,13 @@
 
       // 변경 소식: 가장 최근 1건은 펼쳐서 눈에 띄게, 나머지는 '이전 소식'으로 접기
       const sorted = (news || []).slice().sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
-      if (sorted.length) {
+      if (focusNews) {
+        // 소식 탭에서 고른 소식은 맨 위에 있으니, 나머지만 '다른 소식'으로 접어 둠
+        const rest = sorted.filter(n => n !== focusNews);
+        if (rest.length) html += `<details class="section"><summary><svg class="sum-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>다른 소식 (${rest.length})</summary>
+            ${rest.map(n => `<div class="item news">${newsHtml(n)}</div>`).join('')}
+          </details>`;
+      } else if (sorted.length) {
         const [latest, ...older] = sorted;
         html += `<div class="news-latest news"><span class="label">최근 변경 소식</span>${newsHtml(latest)}</div>`;
         if (older.length) {
@@ -3389,6 +3729,7 @@
     const facRing = new maplibregl.Marker({ element: facRingEl });
     let currentBld = null;   // 지금 패널에 열린 건물
     let onTabChange = () => { };      // 길찾기가 준비되면 실제 함수로 바뀜 (경로 선 보이기·숨기기)
+    let markNewsSeen = () => { };     // 소식이 준비되면 실제 함수로 바뀜 (새 소식 알림·점 지우기)
     let navOpenTo = null;             // 길찾기가 준비되면 '이 건물까지 길찾기' 함수가 들어감
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     function closePanel() {
@@ -3458,6 +3799,8 @@
       });
       $('route-view').hidden = id !== 'route';
       $('detail-view').hidden = id !== 'detail';
+      $('news-view').hidden = id !== 'news';
+      if (id === 'news') markNewsSeen();
       // 길찾기 카드도 패널처럼 왼쪽(모바일은 아래)을 차지하니 범례·상태 메시지를 비킴
       document.body.classList.toggle('panel-open', id === 'route');
       if (id !== 'map') setView('map', { noFocus: true });   // 다른 탭으로 가면 목록 보기는 닫음
@@ -3500,8 +3843,8 @@
     const map = new maplibregl.Map({
       container: 'map',
       style: 'https://tiles.openfreemap.org/styles/positron',
-      center: [127.01716, 37.65142],
-      zoom: isMobile() ? 15.6 : 17, pitch: 55, bearing: 75
+      center: isMobile() && CONFIG.mobileView ? CONFIG.mobileView.center : [127.01716, 37.65142],
+      zoom: isMobile() && CONFIG.mobileView ? CONFIG.mobileView.zoom : 17, pitch: 55, bearing: 75
     });
     // 확대·축소 버튼: 오른쪽 아래 (왼쪽은 상세 패널 자리)
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
@@ -3868,6 +4211,29 @@
           .setLngLat([Number(f.lng), Number(f.lat)]).addTo(map);
       });
 
+      // 장애인 주차구역 마커: facilities에서 type이 '주차'이고 좌표가 있는 것만 (파란 네모 P, 버튼이라 Tab으로도 선택)
+      // 접근성 4색과 헷갈리지 않게 따로 파란색. 누르면 그 건물 패널 맨 위에 주차구역 카드
+      const parkRows = facilities.filter(f => f.type === '주차' && f.lng && f.lat);
+      parkRows.forEach(f => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'park-marker';
+        el.dataset.fid = f.facility_id;
+        el.setAttribute('aria-label', '장애인 주차구역: ' + (f.location_desc || f.facility_id) + ', 상세 정보 열기');
+        el.innerHTML = '<span aria-hidden="true">P</span>';
+        el.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (currentTab !== 'map') return;
+          if (f.building_id && byId[f.building_id]) { showBuilding(f.building_id, f.facility_id); return; }
+          clearSelection();
+          showPanelHtml(`<h2>장애인 주차구역</h2>
+            <div class="top-entrance">${facCardHtml(f, photosByFac, { open: true, focus: true })}</div>`);
+        });
+        new maplibregl.Marker({ element: el }).setLngLat([Number(f.lng), Number(f.lat)]).addTo(map);
+      });
+      if (parkRows.length) $('legend-extra').insertAdjacentHTML('beforeend',
+        '<li><span class="legend-park" aria-hidden="true">P</span><span>장애인 주차</span></li>');
+
       // ---------- 길 상태 ----------
       // 길 모양은 data/routes.geojson(선마다 route_id 속성), 상태는 시트 routes 탭. route_id로 합침
       // (파일이 없거나 비어 있어도 지도는 그대로 동작)
@@ -3943,10 +4309,12 @@
         + (notDrawn.length ? '\n(시트에는 있지만 선이 없는 길: ' + notDrawn.join(', ') + ')' : ''));
 
       // 선택한 카페 표시: 입구와 같은 효과 (아이콘 바깥 흰 테두리 + 2px 버건디, 고른 순간 한 번 파동)
+      // (장애인 주차구역 마커도 같은 방식)
+      const markerOf = fid => document.querySelector(`.cafe-marker[data-fid="${CSS.escape(fid)}"], .park-marker[data-fid="${CSS.escape(fid)}"]`);
       function markCafe(fid, ripple) {
-        document.querySelectorAll('.cafe-marker.is-selected').forEach(el => { if (el.dataset.fid !== fid) el.classList.remove('is-selected'); });
+        document.querySelectorAll('.cafe-marker.is-selected, .park-marker.is-selected').forEach(el => { if (el.dataset.fid !== fid) el.classList.remove('is-selected'); });
         if (!fid) return;
-        const el = document.querySelector(`.cafe-marker[data-fid="${CSS.escape(fid)}"]`);
+        const el = markerOf(fid);
         if (!el) return;
         el.classList.add('is-selected');
         if (!ripple || reduceMotion) return;
@@ -3990,14 +4358,15 @@
 
       // 건물 하나를 패널에 열고 지도에서 선택 표시 (건물 클릭·입구 마커 클릭에서 함께 씀)
       // focusId: 입구 마커로 열었을 때 그 입구의 facility_id (건물을 직접 누르면 null)
-      function showBuilding(id, focusId, fallbackName) {
+      // focusNews: 소식 탭에서 '지도에서 보기'로 열었을 때 그 소식 (패널 맨 위에 보여 줌)
+      function showBuilding(id, focusId, fallbackName, focusNews) {
         const b = byId[id] || { building_id: id, name: fallbackName, access_level: '정보 없음' };
         try {
           // 새 건물(또는 같은 건물)을 다시 열면 이전 입구·시설 선택 표시를 먼저 지움
           facRing.remove();
           markEntrance(null);
           markCafe(null);
-          openPanel(b, facsById[id] || [], newsById[id] || [], photosByBld[id] || [], photosByFac, focusId);
+          openPanel(b, facsById[id] || [], newsById[id] || [], photosByBld[id] || [], photosByFac, focusId, focusNews);
           selectBuilding(id);
           // 고른 건물만 제 색. 입구 마커로 열었으면 그 입구만, 건물을 눌렀으면 그 건물 입구 모두 제 색
           const ent = focusId && (facsById[id] || []).some(f => f.facility_id === focusId && f.type === '입구');
@@ -4016,8 +4385,8 @@
         if (!f.lng || !f.lat) { facRing.remove(); markEntrance(null); markCafe(null); return; }
         const c = [Number(f.lng), Number(f.lat)];
         if (f.type === '입구') { facRing.remove(); markCafe(null); markEntrance(fid, true); }   // 입구: 점 테두리 + 파동
-        else if (f.type === '카페' && document.querySelector(`.cafe-marker[data-fid="${CSS.escape(fid)}"]`)) {
-          facRing.remove(); markEntrance(null); markCafe(fid, true);                            // 카페: 아이콘 테두리 + 파동
+        else if ((f.type === '카페' || f.type === '주차') && markerOf(fid)) {
+          facRing.remove(); markEntrance(null); markCafe(fid, true);                            // 카페·주차: 아이콘 테두리 + 파동
         } else { markEntrance(null); markCafe(null); facRing.setLngLat(c).addTo(map); }         // 다른 시설: 작은 고리
         map.easeTo({ center: c, padding: panelPadding(), duration: reduceMotion ? 0 : 600 });
       };
@@ -4082,7 +4451,7 @@
         h += b.ents.length ? b.ents.map(f => {
           const lv = entLevel(f), d = parseDate(f.last_checked);
           return `<div class="lv-sub"><h5>${esc(entName(f))}</h5><dl class="kv">
-            ${dd('휠체어 출입', `${lvChip(lv)} <span class="kv-sub">${esc(ENTRANCE_DESC[lv])}</span>`)}
+            ${dd('휠체어 출입', `${lvChip(lv)} <span class="kv-sub">${esc(entCrit(lv))}</span>`)}
             ${dd('설비', f.equipment ? esc(f.equipment) : needCheck)}
             ${f.directions ? dd('가는 길', esc(f.directions)) : ''}
             ${f.note ? dd('주의', esc(f.note)) : ''}
@@ -4125,8 +4494,11 @@
         if (!rows.length) return '';
         return `<h3 id="lv-parking-title">장애인 주차구역</h3><ul class="lv-list">${rows.map(f => {
           const d = parseDate(f.last_checked);
+          const bname = f.building_id && byId[f.building_id] ? byId[f.building_id].name : '';
+          const canGo = f.lng && f.lat && f.building_id && byId[f.building_id];
           return `<li class="lv-card"><h4 style="margin:0 0 6px">${esc(f.location_desc || f.facility_id)}</h4>
-            <dl class="kv">${f.equipment ? dd('설비', esc(f.equipment)) : ''}${dd('현장 확인', d ? fmtDate(d) : needCheck)}</dl></li>`;
+            <dl class="kv">${bname ? dd('가까운 건물', esc(bname)) : ''}${f.equipment ? dd('설비', esc(f.equipment)) : ''}${dd('현장 확인', d ? fmtDate(d) : needCheck)}</dl>
+            ${canGo ? `<button type="button" class="lv-ent-go" data-go="${esc(f.building_id)}" data-fid="${esc(f.facility_id)}" aria-label="${esc(f.location_desc || '장애인 주차구역')} 지도에서 보기">지도에서 이 주차구역 보기</button>` : ''}</li>`;
         }).join('')}</ul>`;
       }
 
@@ -4176,8 +4548,66 @@
           if (again) again.focus({ preventScroll: true });   // 다시 그린 뒤에도 포커스가 그 버튼에 남게
         }
       });
+      $('lv-parking').addEventListener('click', e => {
+        const go = e.target.closest('[data-go]');
+        if (!go) return;
+        setView('map', { noFocus: true });
+        showBuilding(go.dataset.go, go.dataset.fid || null);
+      });
       if (currentView === 'list') renderList(true);   // 불러오는 동안 목록 보기를 눌렀다면 바로 채움
       // ==================== 목록 보기 끝 ====================
+
+      // ==================== 소식 탭 ====================
+      // 시트 news 탭 전체를 최근 순으로. newsNewDays 안의 소식은 '새 소식' 표시
+      // 가장 최근 소식이 새 소식이고 이 기기에서 아직 안 봤으면: 탭 옆 점 + 첫 화면 알림 (닫거나 소식 탭을 열면 사라짐)
+      // '봤음'은 이 기기 브라우저에만 소식 하나를 적어 둠 (서버로 보내지 않음)
+      {
+        const newsSorted = news.filter(n => n.title)
+          .sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
+        const newsKey = n => n.news_id || `${n.date}|${n.title}`;
+        const isNew = n => { const d = parseDate(n.date); return !!d && (Date.now() - d) / 86400000 <= (CONFIG.newsNewDays ?? 30); };
+        $('nv-list').innerHTML = newsSorted.map((n, ni) => {
+          const d = parseDate(n.date);
+          const b = n.building_id && byId[n.building_id];
+          const link = /^https?:\/\//.test(n.link || '') ? n.link : '';
+          return `<li class="lv-card nv-card"><article>
+            <div class="nv-meta">${d ? `<span class="date">${fmtDate(d)}</span>` : ''}${b ? `<span class="nv-bld">${esc(b.name || n.building_id)}</span>` : ''}${isNew(n) ? '<span class="nv-new">새 소식</span>' : ''}</div>
+            <h3>${esc(n.title)}</h3>
+            ${n.summary ? `<p class="summary">${esc(n.summary)}</p>` : ''}
+            ${link || b ? `<div class="lv-actions">
+              ${link ? `<a class="lv-more nv-link" href="${esc(link)}" target="_blank" rel="noopener">공지 보기</a>` : ''}
+              ${b ? `<button type="button" class="lv-go" data-go="${esc(n.building_id)}" data-ni="${ni}" aria-label="${esc(b.name || n.building_id)} 지도에서 보기">지도에서 보기</button>` : ''}
+            </div>` : ''}
+          </article></li>`;
+        }).join('');
+        $('nv-status').textContent = newsSorted.length ? `소식 ${newsSorted.length}건` : '등록된 소식이 없어요.';
+        $('nv-list').addEventListener('click', e => {
+          const go = e.target.closest('[data-go]');
+          if (!go) return;
+          setTab('map');
+          showBuilding(go.dataset.go, null, null, newsSorted[Number(go.dataset.ni)]);
+        });
+
+        const latest = newsSorted[0];
+        let seen = '';
+        try { seen = localStorage.getItem('tv-news-seen') || ''; } catch (e) { /* 저장 공간을 못 쓰는 브라우저 */ }
+        const dot = document.querySelector('.tab[data-tab="news"] .tab-dot');
+        markNewsSeen = () => {
+          if (latest) { try { localStorage.setItem('tv-news-seen', newsKey(latest)); } catch (e) { /* 무시 */ } }
+          if (dot) dot.hidden = true;
+          $('news-toast').hidden = true;
+        };
+        if (latest && dot && isNew(latest) && seen !== newsKey(latest)) {
+          dot.hidden = false;
+          const d = parseDate(latest.date);
+          $('nt-title').textContent = (d ? fmtDate(d) + ' · ' : '') + latest.title;
+          $('news-toast').hidden = false;
+        }
+        if (currentTab === 'news') markNewsSeen();
+        $('nt-open').addEventListener('click', () => setTab('news'));
+        $('nt-close').addEventListener('click', () => markNewsSeen());
+      }
+      // ==================== 소식 탭 끝 ====================
 
       // 4) 건물 클릭 → 상세 패널 (같은 자리에 입구 마커가 있으면 마커 쪽에 맡김)
       // 상세 패널은 '접근성 지도' 탭에서만 열림 (길찾기 탭의 지도 클릭은 내비게이션용으로 남겨 둠)
@@ -4214,6 +4644,11 @@
       // 경도와 위도 사이를 탭으로 복사해서, 시트의 lng 칸에 붙여 넣으면 옆 lat 칸까지 한 번에 채워짐
       // 주소에 ?pick 이 있거나 keepStatus가 true일 때만 켜짐 (평소 사용자 화면에서는 꺼져 있음)
       if (PICK) showStatus('좌표 따기 모드: 지도를 누르면 경도·위도가 복사돼요');
+      // [점검용] 화면을 움직이면 지금 화면의 center·zoom을 보여 줌 → CONFIG.mobileView에 옮겨 적기
+      if (PICK) map.on('moveend', () => {
+        const c = map.getCenter();
+        showStatus(`지금 화면: center [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}], zoom ${map.getZoom().toFixed(2)}`);
+      });
       // 복사: 새 방식(clipboard)이 막히면 옛 방식(execCommand)으로 한 번 더 시도
       function copyText(text) {
         const fallback = () => {
@@ -4245,7 +4680,7 @@
       //    (그림 오차로 snapM 안에 닿은 길 끝만 이어진 것으로 봄. 끝점 없이 서로 지나가기만 하는 선은 이어지지 않음)
       // ② 길 수준별 처리는 CONFIG.nav.profiles (혼자: 어려움 제외 / 도움받아 이동: 어려움 포함하되 강한 경고)
       //    휠체어로 드나들기 '어려움'인 입구는 어느 경우에도 출발·도착으로 쓰지 않음
-      // ③ 경로가 없으면 이유와 '센터에 문의' 메시지
+      // ③ 경로가 없으면 이유와 '도움을 받아 이동' 안내 (센터 요청으로 연락처·문의처는 넣지 않음)
       // ④ 결과에 참고용 문구와 지나가는 길의 확인일
       // ⑤ 출발·도착 고르기는 길찾기 탭에서만 (접근성 지도 탭의 패널 열기와 분리)
       // CONFIG.nav에 값이 빠졌을 때 쓰는 기본값
@@ -4255,7 +4690,7 @@
           assisted: { '원활': 1, '일부 제약': 1.3, '정보 없음': 1.5, '어려움': 2 }
         },
         entranceCost: { '원활': 0, '일부 제약': 30, '정보 없음': 30 },
-        snapM: 1, entranceMaxM: 30, bypassSlackM: 10,
+        snapM: 1, entranceMaxM: 30, bypassSlackM: 10, courtyardM: 3, excludeEntrances: [],
         speed: 0.8, defaultFrom: 'main_admin', previewEveryM: 25, previewMaxM: 25
       }, CONFIG.nav || {});
 
@@ -4390,9 +4825,32 @@
         if (/계단/.test(t) && !/경사로|평지|턱\s*없|무단차|엘리베이터|리프트/.test(t)) return { lv: '어려움', est: true };
         return { lv: '정보 없음', est: false };
       }
+      // 안마당(중정) 입구 찾기: 건물 도형의 안쪽 고리(구멍) 안이거나 그 테두리에서 courtyardM 안
+      const holes = [];
+      geo.features.forEach(g => {
+        if (!g.geometry) return;
+        const polys = g.geometry.type === 'Polygon' ? [g.geometry.coordinates] : g.geometry.type === 'MultiPolygon' ? g.geometry.coordinates : [];
+        polys.forEach(poly => poly.slice(1).forEach(ring => holes.push(ring.map(toXY))));
+      });
+      const inRing = (p, ring) => {
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [xi, yi] = ring[i], [xj, yj] = ring[j];
+          if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+      };
+      const nearRing = (p, ring, m) => ring.some((a, i) => i > 0 && proj(p, ring[i - 1], a).d <= m);
+      const navExcluded = new Map();   // facility_id → 뺀 이유
+      facilities.filter(f => f.type === '입구' && f.lng && f.lat).forEach(f => {
+        const p = toXY([Number(f.lng), Number(f.lat)]);
+        if (holes.some(r => inRing(p, r) || nearRing(p, r, NAV.courtyardM))) navExcluded.set(f.facility_id, '건물 안마당(중정) 입구');
+      });
+      (NAV.excludeEntrances || []).forEach(id => navExcluded.set(id, 'CONFIG.nav.excludeEntrances에 적힌 입구'));
+
       function entrancesOf(bid) {
         return facilities
-          .filter(f => f.building_id === bid && f.type === '입구' && f.lng && f.lat)
+          .filter(f => f.building_id === bid && f.type === '입구' && f.lng && f.lat && !navExcluded.has(f.facility_id))
           .map(f => ({ f, ...entranceLevel(f), xy: toXY([Number(f.lng), Number(f.lat)]) }));
       }
 
@@ -4504,10 +4962,14 @@
           dimRoutes: true   // 경로는 버건디 선으로 따로 그려지니 나머지 길은 모두 흐리게
         };
         setFocus(navFocus);
-        const all = [r.s.xy, r.t.xy, ...r.pts].map(toLL);
-        const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
         // 경로가 나오면 위에서 보는 2D로 바꿔 길 전체가 가려지지 않게 (3D 버튼으로 되돌릴 수 있음)
         viewToggle.to2D(false);
+        fitNav(r);
+      }
+      // 경로 전체가 카드에 가리지 않는 자리로 이동 (카드를 접고 펼 때도 다시 맞춤)
+      function fitNav(r) {
+        const all = [r.s.xy, r.t.xy, ...r.pts].map(toLL);
+        const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
         // 북쪽이 위인 2D 화면에 경로 전체가 들어오는 자리를 구해, 기울기 0으로 부드럽게 이동
         const cam = map.cameraForBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]],
           { padding: navPadding(), maxZoom: 18, bearing: 0 });
@@ -4543,11 +5005,10 @@
       }
 
       // ③ 경로가 없을 때: 이유 + 센터 문의
-      const contact = CONFIG.centerContact ? ` (${esc(CONFIG.centerContact)})` : '';
       const failHtml = (msg, hint) => `<div class="nav-box nav-fail" role="alert">
         <b>안내할 수 있는 경로가 없어요.</b>
         <span>${esc(msg)}</span>${hint ? `<span>${esc(hint)}</span>` : ''}
-        <span>이동이 필요하면 장애학생지원센터에 문의해 주세요.${contact}</span></div>`;
+        <span>혼자 이동하기 어렵다면 도움을 받아 이동해 주세요.</span></div>`;
 
       function resultHtml(r, from, to, assisted) {
         const legs = legsOf(r);
@@ -4613,7 +5074,8 @@
           </div>
         </details>`;
 
-        return `<p class="nav-summary">약 ${Math.max(10, Math.round(len / 10) * 10)}m <span>· 약 ${mins}분</span></p>
+        return `<p class="nav-mini">${esc(bName(from))} → ${esc(bName(to))}</p>
+          <p class="nav-summary">약 ${Math.max(10, Math.round(len / 10) * 10)}m <span>· 약 ${mins}분</span></p>
           ${warns.length ? `<details class="nav-caution"${strong ? ' open' : ''}>
             <summary>이동 시 유의사항 (${warns.length})</summary>
             <ul>${warns.map(w => `<li${w.strong ? ' class="strong"' : ''}>${esc(w.t)}</li>`).join('')}</ul>
@@ -4624,6 +5086,7 @@
 
       function runNav(afterWait) {
         clearNav();
+        setRouteCollapsed(false, false);   // 새로 계산할 때는 펼쳐서 결과·안내가 보이게
         const from = navFrom.value, to = navTo.value;
         if (!from || !to) { navResult.innerHTML = ''; return; }
         if (from === to) {
@@ -4652,8 +5115,11 @@
             return;
           }
           lastRoute = r;
-          drawNav(r);
           navResult.innerHTML = resultHtml(r, from, to, assisted);
+          // 휴대폰: 경로가 나오면 카드를 낮게 접어 지도와 경로가 잘 보이게
+          // (혼자 지나가기 어려운 구간 경고가 있으면 접지 않음 → 경고를 먼저 보게)
+          if (isMobile() && !navResult.querySelector('.nav-caution[open]')) setRouteCollapsed(true, false);
+          drawNav(r);
         } catch (err) {
           navResult.innerHTML = failHtml('경로를 계산하는 중 문제가 생겼어요.');
           console.error(err);
@@ -4661,6 +5127,19 @@
       }
 
       runNav.token = 0;
+
+      // 길찾기 카드 접기·펼치기: 접으면 출발→도착·거리·시간만 남기고 지도를 넓게
+      function setRouteCollapsed(on, refit = true) {
+        const rv = $('route-view'), btn = $('nav-collapse');
+        if (rv.classList.contains('collapsed') === on) return;
+        rv.classList.toggle('collapsed', on);
+        btn.textContent = on ? '펼치기' : '접기';
+        btn.setAttribute('aria-expanded', String(!on));
+        btn.setAttribute('aria-label', on ? '길 찾기 카드 펼치기' : '길 찾기 카드 접어서 지도 크게 보기');
+        if (refit && lastRoute) requestAnimationFrame(() => fitNav(lastRoute));
+      }
+      $('nav-collapse').setAttribute('aria-label', '길 찾기 카드 접어서 지도 크게 보기');
+      $('nav-collapse').addEventListener('click', () => setRouteCollapsed(!$('route-view').classList.contains('collapsed')));
 
       // ---------- 네이버 거리뷰로 경로 미리 보기 ----------
       // 키는 CONFIG.naverKeyId (네이버 클라우드 Maps의 Client ID. Client Secret은 절대 넣지 않음)
@@ -4971,7 +5450,8 @@
         .filter(f => f.type === '입구' && f.lng && f.lat)
         .forEach(f => {
           const e = entranceLevel(f);
-          if (e.lv === '어려움') console.info(`[길찾기] 입구 ${f.facility_id} (${f.building_id})는 '어려움'${e.est ? '(설명 글로 추정)' : ''}이라 안내에서 빠져요.`);
+          if (navExcluded.has(f.facility_id)) console.info(`[길찾기] 입구 ${f.facility_id} (${f.building_id})는 ${navExcluded.get(f.facility_id)}라 길찾기에서 빠져요 (지도에는 보임).`);
+          else if (e.lv === '어려움') console.info(`[길찾기] 입구 ${f.facility_id} (${f.building_id})는 '어려움'${e.est ? '(설명 글로 추정)' : ''}이라 안내에서 빠져요.`);
           else if (!attach(toXY([Number(f.lng), Number(f.lat)]), NAV.profiles.assisted))
             console.warn(`[길찾기] 입구 ${f.facility_id} (${f.building_id})는 이용할 수 있는 길에서 너무 멀어 경로에 못 써요.`);
         }));
