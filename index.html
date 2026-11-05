@@ -4125,7 +4125,8 @@
       const many = items.length > 1;
       const figs = items.map((p, i) => {
         const d = parseDate(p.photo_date);
-        const info = [p.caption, d ? '촬영 ' + fmtDate(d) : '', p.source ? '출처: ' + p.source : '']
+        // 사진은 평소 교체하지 않으므로, 촬영 시점 기준 참고용임을 함께 표시
+        const info = [p.caption, d ? '촬영 ' + fmtDate(d) + ' 기준 참고용' : '참고용 사진', p.source ? '출처: ' + p.source : '']
           .filter(Boolean).map(esc).join(' · ');
         const src = esc(photoSrc(p.file));
         return `<figure class="photo">
