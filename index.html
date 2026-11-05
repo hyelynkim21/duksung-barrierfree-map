@@ -3541,6 +3541,188 @@
         max-height: min(50vh, 380px);
       }
     }
+
+    /* ==================== 휴대폰 화면 정리 (2026-11): 위·아래 UI를 줄여 지도가 주인공이 되게 ==================== */
+    @media (max-width: 700px) {
+      :root {
+        --hdr-h: 48px;
+        --tab-h: 46px;
+        --tab-overlap: 10px;
+        --search-h: 42px;
+      }
+
+      /* 머리줄: 한 줄, 작게 */
+      #header {
+        padding: 0 14px var(--tab-overlap);
+      }
+
+      .brand img {
+        height: 24px;
+      }
+
+      .brand-text b {
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* 탭 3개: 아이콘 + 글씨 한 줄, 구분선 없이 */
+      #tabs {
+        gap: 4px;
+        padding: 4px 6px 0;
+        border-radius: 14px 14px 0 0;
+      }
+
+      .tab {
+        flex: 1 1 0;
+        flex-direction: row;
+        gap: 5px;
+        min-width: 0;
+        font-size: clamp(12.5px, 3.6vw, 14px);
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .tab svg {
+        width: 17px;
+        height: 17px;
+      }
+
+      .tab + .tab::before {
+        display: none;
+      }
+
+      .tab[aria-selected="true"]::after {
+        height: 3px;
+        left: 14px;
+        right: 14px;
+      }
+
+      .tab-dot {
+        position: static;
+        align-self: flex-start;
+        margin: 9px 0 0 -2px;
+      }
+
+      /* 검색창·필터: 조금 작게 */
+      .map-search {
+        top: calc(var(--top-h) + 6px);
+        left: 8px;
+        right: 8px;
+        gap: 6px;
+      }
+
+      .ms-box {
+        padding: 0 4px 0 12px;
+      }
+
+      #ms-input {
+        font-size: 15px;
+      }
+
+      #ms-clear {
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+      }
+
+      .ms-filter svg {
+        width: 19px;
+        height: 19px;
+      }
+
+      .ms-dot {
+        top: 7px;
+        right: 7px;
+      }
+
+      /* 지도/목록: 검색창 아래 작은 세그먼트 */
+      .view-switch {
+        top: calc(var(--top-h) + var(--search-h) + 12px);
+        right: 8px;
+        padding: 3px;
+        gap: 2px;
+        border-radius: 10px;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, .12);
+      }
+
+      .view-switch button {
+        min-height: 32px;
+        padding: 0 10px;
+        gap: 4px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+
+      .view-switch button svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      #status {
+        top: calc(var(--top-h) + var(--search-h) + 12px);
+        max-width: calc(100vw - 150px);
+      }
+
+      #list-view .lv-wrap {
+        padding-top: calc(var(--search-h) + 64px);
+      }
+
+      /* 아래쪽 한 줄: 왼쪽 '접근성 수준' 범례 · 오른쪽 '길찾기' (아이폰 아래 안전 영역 피함) */
+      #legend {
+        left: 8px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        max-width: calc(100vw - 140px);
+        padding: 8px 14px;
+      }
+
+      .ms-route {
+        right: 8px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        height: 42px;
+        padding: 0 16px 0 12px;
+        font-size: 14px;
+      }
+
+      /* 지도 버튼: 작고 촘촘하게, 아래 한 줄 위로 */
+      .maplibregl-ctrl-bottom-right {
+        bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+        margin: 0 8px 6px 0;
+      }
+
+      .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button {
+        width: 34px;
+        height: 34px;
+      }
+
+      /* 지도 저작권: 작은 (i) 버튼으로 (누르면 펼침) */
+      .maplibregl-ctrl-attrib {
+        font-size: 10px;
+      }
+
+      /* 건물 상세(아래에서 올라오는 시트): 손잡이 + 지도를 다 가리지 않는 높이 */
+      #panel {
+        height: 52vh;
+        height: 52dvh;
+        padding-top: 22px;
+      }
+
+      #panel::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        width: 40px;
+        height: 4px;
+        margin-left: -20px;
+        border-radius: 2px;
+        background: #d3d7d5;
+      }
+    }
   </style>
 </head>
 
@@ -3762,8 +3944,7 @@
       detail: {
         model: 'models/campus_detail.glb',
         image: '',   // 실패 대비 렌더 이미지가 있으면 'models/campus_detail.jpg'
-        toon: false, outline: false,
-        labelAlias: { student_hall: ['Cube', 'Cube.001'], dukwoodang: ['Hanok_base', 'Hanok_columns', 'Hanok_ridge', 'Hanok_roof', 'Hanok_walls'] }
+        toon: false, outline: false
       },
       newsNewDays: 30,  // 소식 날짜가 이 기간(일) 안이면 '새 소식'으로 표시하고, 처음 들어올 때 알림을 띄움
       // 휴대폰에서 처음 들어왔을 때 보이는 화면 (손으로 확대하지 않아도 주요 건물이 크게 보이게)

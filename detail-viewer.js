@@ -89,7 +89,11 @@ const DEF = {
   //  (polar 66 = 수평에서 약 24° 내려다보는 낮은 사선 시점. fillW가 1보다 크면 양옆이 화면 밖으로 조금 나감)
   //  - mobile: 휴대폰(세로 화면)에서만 덮어쓸 값. 세로 화면은 가로가 좁아 캠퍼스 전체를 넣으면 너무 작아서,
   //    조금 더 내려다보며 가운데를 크게 보여 줌 (양옆은 손가락으로 옮겨 보기)
-  view: { azimuth: 75, polar: 66, fillW: 1.15, fillH: 1.15, mobile: { polar: 58, fillW: 2.1, fillH: 1.1 } }
+  view: {
+    azimuth: 75, polar: 66, fillW: 1.15, fillH: 1.15,
+    //  - central: 캠퍼스 가운데에서 이 비율(0~1) 안의 건물·나무만 화면에 맞춤 → 가운데 건물군이 화면을 채움
+    mobile: { polar: 60, fillW: 1.0, fillH: 0.85, central: 0.42 }
+  }
 };
 const C = Object.assign({}, DEF, (typeof CONFIG !== 'undefined' && CONFIG.detail) || {});
 C.view = Object.assign({}, DEF.view, C.view || {});
@@ -600,11 +604,11 @@ const viewDir = () => {
   const az = V.azimuth * Math.PI / 180, po = V.polar * Math.PI / 180;
   return new THREE.Vector3(-Math.sin(po) * Math.sin(az), Math.cos(po), Math.sin(po) * Math.cos(az));
 };
-function extentsAt(cam) {
+function extentsAt(cam, pts = fitPoints) {
   cam.updateMatrixWorld();
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   const v = new THREE.Vector3();
-  for (const p of fitPoints) {
+  for (const p of pts) {
     // 카메라 뒤에 있는 점이 있으면 '안 들어감'으로 봄 (뒤쪽 점은 화면에 뒤집혀 찍혀서 계산이 틀어짐)
     v.copy(p).applyMatrix4(cam.matrixWorldInverse);
     if (v.z > -cam.near) return { x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity };
@@ -621,7 +625,16 @@ function computeHome() {
   }
   const cam = camera.clone();
   const dir = viewDir();
-  const b = new THREE.Box3().setFromPoints(fitPoints);
+  // 휴대폰처럼 central 값이 있으면 캠퍼스 가운데 건물군만 화면에 맞춤
+  let pts = fitPoints;
+  const Vc = viewNow();
+  if (Vc.central) {
+    const all = new THREE.Box3().setFromPoints(fitPoints), cc = all.getCenter(new THREE.Vector3()), sz = all.getSize(new THREE.Vector3());
+    const lim = Math.hypot(sz.x, sz.z) / 2 * Vc.central;
+    const near = fitPoints.filter(p => Math.hypot(p.x - cc.x, p.z - cc.z) < lim);
+    if (near.length > 40) pts = near;
+  }
+  const b = new THREE.Box3().setFromPoints(pts);
   const target = b.getCenter(new THREE.Vector3());
   target.y = groundY;
   const place = d => { cam.position.copy(target).addScaledVector(dir, d); cam.lookAt(target); };
@@ -631,14 +644,14 @@ function computeHome() {
     for (let i = 0; i < 40; i++) {
       const mid = (lo + hi) / 2;
       place(mid);
-      const e = extentsAt(cam);
+      const e = extentsAt(cam, pts);
       const V = viewNow();
       const fits = (e.x1 - e.x0) / 2 <= V.fillW && (e.y1 - e.y0) / 2 <= V.fillH;
       if (fits) hi = mid; else lo = mid;
     }
     place(hi);
     // 화면 가운데로: 모델이 치우친 만큼 바라보는 점을 땅 위에서 옮김
-    const e = extentsAt(cam);
+    const e = extentsAt(cam, pts);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2((e.x0 + e.x1) / 2, (e.y0 + e.y1) / 2), cam);
     const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -groundY), new THREE.Vector3());
@@ -761,15 +774,24 @@ async function buildLabels(model) {
   window.addEventListener('tv-names', () => labels.forEach(l => { if (window.tvBuildingNames[l.id]) l.el.textContent = window.tvBuildingNames[l.id]; }));
 }
 const lv = new THREE.Vector3();
+const placed = [];
 function updateLabels() {
   if (!labels.length) return;
   const w = stage.clientWidth, h = stage.clientHeight;
+  labels.forEach(l => { l.d = camera.position.distanceToSquared(l.pos); });
+  labels.sort((a, b) => a.d - b.d);
+  placed.length = 0;
   for (const l of labels) {
     lv.copy(l.pos).applyMatrix4(camera.matrixWorldInverse);
     if (lv.z > -camera.near) { l.el.style.display = 'none'; continue; }   // 카메라 뒤
     lv.copy(l.pos).project(camera);
     const x = (lv.x + 1) / 2 * w, y = (1 - lv.y) / 2 * h;
     if (x < -100 || x > w + 100 || y < -40 || y > h + 40) { l.el.style.display = 'none'; continue; }
+    // 겹침 검사 (이름표 크기는 처음 한 번만 잼)
+    if (!l.w) { l.el.style.display = ''; l.w = l.el.offsetWidth || 60; l.h = l.el.offsetHeight || 20; }
+    const r = { x0: x - l.w / 2 - 4, x1: x + l.w / 2 + 4, y0: y - l.h - 2, y1: y + 2 };
+    if (placed.some(q => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0)) { l.el.style.display = 'none'; continue; }
+    placed.push(r);
     l.el.style.display = '';
     l.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
   }
