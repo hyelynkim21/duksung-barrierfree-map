@@ -3545,10 +3545,10 @@
     /* ==================== 휴대폰 화면 정리 (2026-11): 위·아래 UI를 줄여 지도가 주인공이 되게 ==================== */
     @media (max-width: 700px) {
       :root {
-        --hdr-h: 48px;
-        --tab-h: 46px;
+        --hdr-h: 46px;
+        --tab-h: 44px;
         --tab-overlap: 10px;
-        --search-h: 42px;
+        --search-h: 52px;   /* 검색창 52px, 필터 46px */
       }
 
       /* 머리줄: 한 줄, 작게 */
@@ -3627,9 +3627,15 @@
         font-size: 13px;
       }
 
+      .ms-filter {
+        width: 46px;
+        height: 46px;
+        align-self: center;
+      }
+
       .ms-filter svg {
-        width: 19px;
-        height: 19px;
+        width: 20px;
+        height: 20px;
       }
 
       .ms-dot {
@@ -3673,21 +3679,26 @@
       #legend {
         left: 8px;
         bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-        max-width: calc(100vw - 140px);
-        padding: 8px 14px;
+        max-width: calc(100vw - 160px);
+        min-height: 52px;
+        padding: 8px 16px;
+        border-radius: 26px;
       }
 
       .ms-route {
         right: 8px;
         bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-        height: 42px;
-        padding: 0 16px 0 12px;
-        font-size: 14px;
+        height: 52px;
+        min-width: 130px;
+        justify-content: center;
+        padding: 0 18px 0 14px;
+        border-radius: 26px;
+        font-size: 15px;
       }
 
       /* 지도 버튼: 작고 촘촘하게, 아래 한 줄 위로 */
       .maplibregl-ctrl-bottom-right {
-        bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(72px + env(safe-area-inset-bottom, 0px));
       }
 
       .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
@@ -3695,8 +3706,14 @@
       }
 
       .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button {
-        width: 34px;
-        height: 34px;
+        width: 32px;
+        height: 32px;
+      }
+
+      .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button svg,
+      .locate-btn svg {
+        width: 18px;
+        height: 18px;
       }
 
       /* 지도 저작권: 작은 (i) 버튼으로 (누르면 펼침) */

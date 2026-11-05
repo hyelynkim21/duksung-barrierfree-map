@@ -92,7 +92,8 @@ const DEF = {
   view: {
     azimuth: 75, polar: 66, fillW: 1.15, fillH: 1.15,
     //  - central: 캠퍼스 가운데에서 이 비율(0~1) 안의 건물·나무만 화면에 맞춤 → 가운데 건물군이 화면을 채움
-    mobile: { polar: 60, fillW: 1.0, fillH: 0.85, central: 0.42 }
+    //  - mobile 안에 position·target을 적으면 휴대폰은 그 자리로 고정 (휴대폰에서 ?pick 으로 값 따기)
+    mobile: { polar: 62, fillW: 1.2, fillH: 1.0, central: 0.3 }
   }
 };
 const C = Object.assign({}, DEF, (typeof CONFIG !== 'undefined' && CONFIG.detail) || {});
@@ -619,9 +620,10 @@ function extentsAt(cam, pts = fitPoints) {
   return { x0, x1, y0, y1 };
 }
 function computeHome() {
-  if (C.view.position && C.view.target) {
-    const target = new THREE.Vector3(...C.view.target);
-    return { target, pos: new THREE.Vector3(...C.view.position) };
+  const Vf = viewNow();   // 휴대폰이면 mobile 값이 덮어쓴 것
+  if (Vf.position && Vf.target) {
+    const target = new THREE.Vector3(...Vf.target);
+    return { target, pos: new THREE.Vector3(...Vf.position) };
   }
   const cam = camera.clone();
   const dir = viewDir();
