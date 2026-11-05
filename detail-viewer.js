@@ -80,7 +80,9 @@ const DEF = {
   //  - fillW·fillH: 캠퍼스가 화면 가로·세로를 채우는 비율 (둘 중 먼저 닿는 쪽에 맞춤)
   //  - position·target을 직접 적으면 그 자리로 고정 (주소 뒤 ?pick 으로 값 따기)
   //  (polar 66 = 수평에서 약 24° 내려다보는 낮은 사선 시점. fillW가 1보다 크면 양옆이 화면 밖으로 조금 나감)
-  view: { azimuth: 75, polar: 66, fillW: 1.15, fillH: 1.15 }
+  //  - mobile: 휴대폰(세로 화면)에서만 덮어쓸 값. 세로 화면은 가로가 좁아 캠퍼스 전체를 넣으면 너무 작아서,
+  //    조금 더 내려다보며 가운데를 크게 보여 줌 (양옆은 손가락으로 옮겨 보기)
+  view: { azimuth: 75, polar: 66, fillW: 1.15, fillH: 1.15, mobile: { polar: 58, fillW: 2.1, fillH: 1.1 } }
 };
 const C = Object.assign({}, DEF, (typeof CONFIG !== 'undefined' && CONFIG.detail) || {});
 C.view = Object.assign({}, DEF.view, C.view || {});
@@ -116,7 +118,9 @@ css.textContent = `
   #detail-view .dv-ctrls svg { width: 20px; height: 20px; }
   #detail-view .detail-reset { display: none !important; }
   @media (max-width: 700px) {
-    #detail-view .detail-cap { left: 8px; bottom: 16px; padding: 9px 16px; border-radius: 22px; font-size: 12px; max-width: calc(100% - 72px); }
+    #detail-view .detail-cap { left: 8px; bottom: 16px; padding: 8px 14px; border-radius: 18px; font-size: 11.5px; line-height: 1.45; max-width: calc(100% - 68px); }
+    #detail-view .detail-cap b { font-size: 12.5px; }
+    #detail-view .detail-cap .meta { font-size: 11px; }
     #detail-view .dv-ctrls { right: 8px; bottom: 16px; }
   }`;
 document.head.appendChild(css);
@@ -575,8 +579,11 @@ function collectFitPoints(model) {
     for (let i = 0; i < 8; i++) fitPoints.push(new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
   });
 }
+// 지금 화면에 쓸 시점 값 (휴대폰이면 mobile 값으로 덮어씀)
+const viewNow = () => (isMobile() && C.view.mobile ? { ...C.view, ...C.view.mobile } : C.view);
 const viewDir = () => {
-  const az = C.view.azimuth * Math.PI / 180, po = C.view.polar * Math.PI / 180;
+  const V = viewNow();
+  const az = V.azimuth * Math.PI / 180, po = V.polar * Math.PI / 180;
   return new THREE.Vector3(-Math.sin(po) * Math.sin(az), Math.cos(po), Math.sin(po) * Math.cos(az));
 };
 function extentsAt(cam) {
@@ -611,7 +618,8 @@ function computeHome() {
       const mid = (lo + hi) / 2;
       place(mid);
       const e = extentsAt(cam);
-      const fits = (e.x1 - e.x0) / 2 <= C.view.fillW && (e.y1 - e.y0) / 2 <= C.view.fillH;
+      const V = viewNow();
+      const fits = (e.x1 - e.x0) / 2 <= V.fillW && (e.y1 - e.y0) / 2 <= V.fillH;
       if (fits) hi = mid; else lo = mid;
     }
     place(hi);
