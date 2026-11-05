@@ -3048,6 +3048,499 @@
         margin: 0;
       }
     }
+
+    /* ==================== 통합 접근성 지도: 검색·필터·길찾기 버튼 (2026-11) ==================== */
+    :root {
+      --hdr-h: 64px;        /* 머리줄을 조금 낮춰 지도 공간 확보 */
+      --search-h: 52px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .map-search {
+      position: fixed;
+      z-index: 24;
+      top: calc(var(--top-h) + 16px);
+      left: 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    body:not([data-tab="map"]) .map-search {
+      display: none;
+    }
+
+    .ms-box {
+      position: relative;
+      width: min(400px, calc(100vw - 520px));
+      min-width: 260px;
+      height: var(--search-h);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px 0 16px;
+      border-radius: calc(var(--search-h) / 2);
+      background: var(--paper);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+    }
+
+    .ms-box:focus-within {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .ms-ico {
+      width: 20px;
+      height: 20px;
+      flex: none;
+      color: var(--muted);
+    }
+
+    #ms-input {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      border: 0;
+      background: none;
+      color: var(--ink);
+      font: 400 16px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      outline: none;
+    }
+
+    #ms-input::-webkit-search-cancel-button {
+      display: none;   /* 지우기는 오른쪽 ✕ 버튼 하나로 */
+    }
+
+    #ms-clear {
+      width: 36px;
+      height: 36px;
+      flex: none;
+      border: 0;
+      border-radius: 50%;
+      background: var(--wash);
+      color: var(--ink);
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    #ms-results {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      max-height: min(60vh, 440px);
+      overflow-y: auto;
+      margin: 0;
+      padding: 6px;
+      list-style: none;
+      border-radius: 16px;
+      background: var(--paper);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+    }
+
+    .ms-group {
+      padding: 10px 12px 4px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .ms-opt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .ms-opt:hover,
+    .ms-opt[aria-selected="true"] {
+      background: var(--wash);
+    }
+
+    .ms-opt[aria-selected="true"] {
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
+    }
+
+    .ms-name {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ms-name b {
+      display: block;
+      font-size: 15px;
+      line-height: 1.35;
+      word-break: keep-all;
+    }
+
+    .ms-name small {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .ms-opt .chip {
+      padding: 1px 10px;
+      font-size: 12px;
+    }
+
+    .ms-empty {
+      padding: 14px 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--muted);
+      word-break: keep-all;
+    }
+
+    .ms-filter {
+      position: relative;
+      width: var(--search-h);
+      height: var(--search-h);
+      flex: none;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: var(--paper);
+      color: var(--ink);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+      cursor: pointer;
+    }
+
+    .ms-filter svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .ms-filter.active,
+    .ms-filter[aria-expanded="true"] {
+      color: var(--select);
+    }
+
+    .ms-dot {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 10px;
+      height: 10px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      background: var(--select);
+    }
+
+    .ms-filter-pop {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 270px;
+      padding: 14px 16px 12px;
+      border-radius: 16px;
+      background: var(--paper);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+    }
+
+    .ms-filter-pop h3 {
+      margin: 0 0 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .mf-opt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .mf-opt input {
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      accent-color: var(--select);
+    }
+
+    .mf-count {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .mf-sep {
+      height: 1px;
+      margin: 8px 0 10px;
+      background: var(--line);
+    }
+
+    .mf-reset {
+      margin-top: 6px;
+      padding: 6px 0;
+      border: 0;
+      background: none;
+      color: #1a49e6;
+      font: 500 14px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      cursor: pointer;
+    }
+
+    .ms-route {
+      height: var(--search-h);
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 20px 0 16px;
+      border: 0;
+      border-radius: calc(var(--search-h) / 2);
+      background: var(--select);
+      color: #ffffff;
+      font: 700 15px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+      cursor: pointer;
+    }
+
+    .ms-route svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .ms-route:hover {
+      background: var(--brand-hover);
+    }
+
+    /* 필터로 숨긴 아이콘 */
+    body.hide-park .park-marker,
+    body.hide-cafe .cafe-marker {
+      display: none;
+    }
+
+    /* 목록은 위쪽 공통 검색창·필터를 씀 (목록 안 검색칸·수준 버튼은 숨김) */
+    #list-view .lv-tools {
+      display: none;
+    }
+
+    #list-view .lv-wrap {
+      padding-top: calc(var(--search-h) + 40px);
+    }
+
+    /* 길찾기 카드: ✕(지도로 돌아가기) · 접기 · (i) */
+    .rv-head {
+      padding-right: 170px;
+    }
+
+    .rv-close {
+      position: absolute;
+      top: -6px;
+      right: -8px;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--wash);
+      color: var(--ink);
+      font-size: 17px;
+      cursor: pointer;
+    }
+
+    .rv-collapse {
+      right: 42px;
+    }
+
+    .rv-info {
+      right: 112px;
+    }
+
+    /* PC: 검색창 아래부터 상세 패널·상태 메시지 */
+    @media (min-width: 701px) {
+      #panel,
+      #status {
+        top: calc(var(--top-h) + var(--search-h) + 28px);
+      }
+
+      .lv-head {
+        padding-right: 0;
+      }
+    }
+
+    /* 휴대폰: 검색창은 지도 위 가로 가득, 지도/목록 버튼은 그 아래, 길찾기는 아래쪽 고정 버튼 */
+    @media (max-width: 700px) {
+      :root {
+        --hdr-h: 56px;
+        --search-h: 48px;
+      }
+
+      .map-search {
+        top: calc(var(--top-h) + 8px);
+        left: 8px;
+        right: 8px;
+        gap: 6px;
+      }
+
+      .ms-box {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+      }
+
+      .ms-filter-pop {
+        width: min(290px, calc(100vw - 16px));
+      }
+
+      .view-switch,
+      #status {
+        top: calc(var(--top-h) + var(--search-h) + 16px);
+      }
+
+      .ms-route {
+        position: fixed;
+        right: 60px;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        height: 48px;
+        z-index: 21;
+      }
+
+      body.panel-open .ms-route,
+      body[data-view="list"] .ms-route {
+        display: none;
+      }
+
+      #legend {
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      }
+
+      #list-view .lv-wrap {
+        padding-top: calc(var(--search-h) + 72px);
+      }
+
+      /* 건물 상세(아래에서 올라오는 시트): '이곳으로 길찾기'는 시트 아래쪽에 붙어 있게 */
+      #panel .route-cta {
+        position: sticky;
+        bottom: calc(-28px + env(safe-area-inset-bottom, 0px));
+        z-index: 2;
+        box-shadow: 0 -10px 14px #ffffff;
+      }
+
+      .rv-head {
+        padding-right: 150px;
+      }
+
+      .rv-info {
+        right: 106px;
+      }
+    }
+
+    /* ==================== 추가 개선 (2026-11): 목록 카드·등급 구분·검색 묶음 ==================== */
+    .lv-row {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .lv-thumb {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 12px;
+      background: var(--wash);
+      color: var(--muted);
+    }
+
+    .lv-thumb svg {
+      width: 30px;
+      height: 30px;
+    }
+
+    .lv-thumb img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .lv-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .lv-main .lv-ent-count {
+      margin: 6px 0 2px;
+    }
+
+    .lv-sum {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+      word-break: keep-all;
+    }
+
+    .lv-lvwrap,
+    .ms-lvwrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lvl-label,
+    .ms-lvwrap small {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .lvl-note {
+      margin: -6px 0 14px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      background: #fff6e9;
+      border-left: 4px solid #f2a33a;
+      font-size: 13px;
+      line-height: 1.55;
+      word-break: keep-all;
+    }
+
+    /* 검색 결과: 건물 아래 그 건물의 출입구를 들여서 */
+    .ms-opt.ms-bld .ms-name b {
+      font-size: 16px;
+    }
+
+    .ms-opt.ms-child {
+      margin-left: 14px;
+      padding-left: 14px;
+      border-left: 2px solid var(--line);
+      border-radius: 0 10px 10px 0;
+      min-height: 44px;
+    }
+
+    @media (max-width: 700px) {
+      .lv-thumb {
+        width: 60px;
+        height: 60px;
+      }
+
+      #ms-results {
+        max-height: min(50vh, 380px);
+      }
+    }
   </style>
 </head>
 
@@ -3070,25 +3563,18 @@
           <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
           <path d="M9 3v15M15 6v15" />
         </svg>접근성 지도</button>
-      <button class="tab" role="tab" data-tab="route" aria-selected="false" aria-controls="route-view" tabindex="-1">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">
-          <circle cx="6" cy="19" r="2.5" />
-          <circle cx="18" cy="5" r="2.5" />
-          <path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5" />
-        </svg>길찾기</button>
       <button class="tab" role="tab" data-tab="detail" aria-selected="false" aria-controls="detail-view" tabindex="-1">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true">
           <path d="M12 2l9 5v10l-9 5-9-5V7z" />
           <path d="M3 7l9 5 9-5M12 12v10" />
-        </svg>상세 캠퍼스</button>
+        </svg>3D 캠퍼스</button>
       <button class="tab" role="tab" data-tab="news" aria-selected="false" aria-controls="news-view" tabindex="-1">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true">
           <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
           <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
-        </svg>소식<span class="tab-dot" hidden></span></button>
+        </svg>변경 소식<span class="tab-dot" hidden></span></button>
     </nav>
   </div>
 
@@ -3096,14 +3582,14 @@
   <div id="status"></div>
 
   <aside id="legend" aria-label="색상 안내">
-    <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">접근성 수준 <span
+    <button id="legend-toggle" aria-expanded="false" aria-controls="legend-body">접근성 수준 <span
         aria-hidden="true">▾</span></button>
     <div id="legend-body">
       <div class="legend-row">
         <ul id="legend-list"></ul>
         <ul id="legend-extra"></ul>
       </div>
-      <p>건물·길·입구(점)를 같은 색으로 나타내요. 누르면 상세 정보가 열려요.</p>
+      <p>건물·길·입구(점)를 같은 색으로 나타내요. 입구는 건물을 고르면 보여요. (색 설명이에요. 거르기는 검색창 옆 필터 버튼)</p>
     </div>
   </aside>
 
@@ -3114,7 +3600,7 @@
     <div id="panel-body"></div>
   </aside>
 
-  <!-- 길찾기 탭 (시범 기능): 출발·도착 건물을 고르면 길 레이어를 따라 경로 안내 -->
+  <!-- 길찾기 (시범 기능): 접근성 지도의 '길찾기' 버튼이나 건물 패널의 '이곳으로 길찾기'로 열림 -->
   <aside id="route-view" role="tabpanel" aria-label="길 찾기" hidden>
     <div class="rv-head">
       <svg class="rv-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
@@ -3123,6 +3609,7 @@
         <path d="M11.5 30H22a5.5 5.5 0 0 0 0-11h-6a5.5 5.5 0 0 1 0-11h12.5" />
       </svg>
       <h2>길 찾기</h2>
+      <button id="nav-close" class="rv-close" type="button" aria-label="길 찾기 닫고 지도로 돌아가기">✕</button>
       <button id="nav-collapse" class="rv-collapse" type="button" aria-expanded="true" aria-controls="route-view">접기</button>
       <button id="nav-info-btn" class="rv-info" type="button" aria-label="길 찾기 안내 보기" aria-expanded="false" aria-controls="nav-info">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
@@ -3155,6 +3642,25 @@
     </div>
     <div id="nav-result" aria-live="polite"></div>
   </aside>
+
+  <!-- 접근성 지도: 검색창 + 필터 + 길찾기 (지도·목록 공통) -->
+  <div id="mapsearch" class="map-search" role="search" aria-label="건물·시설 검색">
+    <div class="ms-box">
+      <svg class="ms-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+      <input id="ms-input" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ms-results"
+        aria-label="건물, 시설, 출입구 검색" placeholder="건물, 시설, 출입구 검색" autocomplete="off" enterkeyhint="search" />
+      <button id="ms-clear" type="button" aria-label="검색어 지우기" hidden>✕</button>
+      <ul id="ms-results" role="listbox" aria-label="검색 결과" hidden></ul>
+    </div>
+    <button id="ms-filter" class="ms-filter" type="button" aria-label="필터" aria-expanded="false" aria-controls="ms-filter-pop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+      <span class="ms-dot" hidden></span>
+    </button>
+    <div id="ms-filter-pop" class="ms-filter-pop" role="dialog" aria-label="지도·목록 필터" hidden></div>
+    <button id="ms-route" class="ms-route" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2.5" /><circle cx="18" cy="5" r="2.5" /><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5" /></svg>길찾기</button>
+    <p id="ms-live" class="sr-only" aria-live="polite"></p>
+  </div>
 
   <!-- 접근성 지도 탭: 지도 보기 ↔ 목록 보기 전환 (지도 영역 오른쪽 위) -->
   <div id="view-switch" class="view-switch" role="group" aria-label="보기 방식 선택">
@@ -3256,7 +3762,8 @@
       detail: {
         model: 'models/campus_detail.glb',
         image: '',   // 실패 대비 렌더 이미지가 있으면 'models/campus_detail.jpg'
-        toon: false, outline: false
+        toon: false, outline: false,
+        labelAlias: { student_hall: ['Cube', 'Cube.001'], dukwoodang: ['Hanok_base', 'Hanok_columns', 'Hanok_ridge', 'Hanok_roof', 'Hanok_walls'] }
       },
       newsNewDays: 30,  // 소식 날짜가 이 기간(일) 안이면 '새 소식'으로 표시하고, 처음 들어올 때 알림을 띄움
       // 휴대폰에서 처음 들어왔을 때 보이는 화면 (손으로 확대하지 않아도 주요 건물이 크게 보이게)
@@ -3403,7 +3910,7 @@
     if (window.ResizeObserver) new ResizeObserver(() => {
       document.documentElement.style.setProperty('--legend-h', $('legend').offsetHeight + 'px');
     }).observe($('legend'));
-    setLegend(!isMobile());
+    setLegend(false);   // 범례는 접은 상태로 시작 ('접근성 수준 ▾'을 누르면 펼침)
 
     // ---------- 사진 ----------
     // 시트 file 열: 파일 이름만 쓰면 photoDir 폴더에서, http로 시작하면 그 주소에서 불러옴
@@ -3647,7 +4154,8 @@
         let v;
         if (t === '입구') {
           const ok = list.filter(f => f.access_level === '원활').length;
-          v = `${list.length}곳${ok ? ` · 휠체어 원활 ${ok}곳` : ''}`;
+          const hard = list.filter(f => f.access_level === '어려움').length;
+          v = `${list.length}곳${ok ? ` · 휠체어 원활 ${ok}곳` : ''}${hard ? ` · 어려움 ${hard}곳` : ''}`;
         } else {
           const floors = [...new Set(list.map(f => f.floor).filter(Boolean))].sort((x, y) => floorRank(x) - floorRank(y));
           v = `${floors.length ? floors.join('·') + ' · ' : ''}${list.length}곳`;
@@ -3655,15 +4163,20 @@
         return `<div><dt>${esc(TYPE_TITLES[t] || t)}</dt><dd>${esc(v)}</dd></div>`;
       }).join('');
 
+      // 건물 전체 수준(시트 buildings의 access_level, 기준은 그대로)과 출입구별 수준이 다를 수 있음을 알려 줌
+      const hardEnts = facs.filter(f => f.type === '입구' && f.access_level === '어려움').length;
+      const levelNote = hardEnts && level !== '어려움'
+        ? `<p class="lvl-note">건물 전체 수준과 별개로, 이 건물 출입구 중 ${hardEnts}곳은 휠체어로 드나들기 어려워요. 아래 '입구'에서 출입구별 수준을 확인해 주세요.</p>` : '';
       let html = `<h2>${esc(b.name || b.building_id)}</h2>
-        <div class="bld-level">${lvChip(level, true)}<span class="meta">${LEVELS[level].desc}</span></div>
+        <div class="bld-level"><span class="lvl-label">건물 전체</span>${lvChip(level, true)}<span class="meta">${LEVELS[level].desc}</span></div>
+        ${levelNote}
         ${focusFac ? `<div class="top-entrance">${facCardHtml(focusFac, photosByFac, { open: true, focus: true })}</div>` : ''}
         ${focusNews ? `<div class="top-entrance news-latest news focus-news"><span class="label">선택한 소식</span>${newsHtml(focusNews)}</div>` : ''}
         ${photoHtml(bldPhotos)}
         ${sumRows ? `<dl class="acc-sum" aria-label="접근성 정보 요약">${sumRows}</dl>` : ''}
         ${b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''}
         ${checkedCard(b.last_checked, b.note)}
-        ${CONFIG.tabs && CONFIG.tabs.route ? `<button type="button" class="route-cta" data-route-to="${esc(b.building_id)}">이 건물로 안내하기</button>` : ''}`;
+        ${CONFIG.tabs && CONFIG.tabs.route ? `<button type="button" class="route-cta" data-route-to="${esc(b.building_id)}">이곳으로 길찾기</button>` : ''}`;
 
       // 변경 소식: 가장 최근 1건은 펼쳐서 눈에 띄게, 나머지는 '이전 소식'으로 접기
       const sorted = (news || []).slice().sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
@@ -3792,6 +4305,8 @@
       $('view-switch').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
       $('list-view').hidden = v !== 'list';
       if (v === 'list') {
+        $('ms-results').hidden = true;
+        $('ms-input').setAttribute('aria-expanded', 'false');
         if (renderList) renderList(true);
         else $('lv-status').textContent = '목록을 불러오는 중이에요…';
         if (!opts.noFocus) $('list-title').focus({ preventScroll: true });
@@ -3818,7 +4333,7 @@
       currentTab = id;
       document.body.dataset.tab = id;
       tabButtons().forEach(b => {
-        const on = b.dataset.tab === id;
+        const on = b.dataset.tab === (id === 'route' ? 'map' : id);   // 길찾기는 접근성 지도 안의 기능
         b.setAttribute('aria-selected', String(on));
         b.tabIndex = on ? 0 : -1;
       });
@@ -3836,6 +4351,13 @@
       }
     }
     tabButtons().forEach(btn => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
+    // 접근성 지도의 '길찾기' 버튼 → 기존 길찾기 카드 열기 / 카드의 ✕ → 지도로 돌아가기
+    if (!(CONFIG.tabs && CONFIG.tabs.route)) $('ms-route').hidden = true;
+    $('ms-route').addEventListener('click', () => {
+      setTab('route');
+      requestAnimationFrame(() => $('nav-from').focus({ preventScroll: true }));
+    });
+    $('nav-close').addEventListener('click', () => { setTab('map'); $('ms-route').focus({ preventScroll: true }); });
     // 출발·도착 칸: 핀·이름·빈 곳을 눌러도 건물 목록이 바로 열리게 (지원하지 않는 브라우저는 칸에 포커스만)
     document.querySelectorAll('.nav-field').forEach(field => field.addEventListener('click', e => {
       const sel = field.querySelector('select');
@@ -4061,10 +4583,27 @@
         map.setPaintProperty('routes-line', 'line-color', levelColor('condition', on));
         map.setPaintProperty('routes-casing', 'line-opacity', on ? 0.5 : 1);
       }
+      // 접근성 수준 필터(지도): 고른 수준이 아닌 건물은 옅은 회색으로 (지우지 않고 위치는 보이게)
+      let mapLevelFilter = '전체', lastFocus = null;
+      const FILTER_DIM = '#dfe2e0';
+      const withFilter = expr => mapLevelFilter === '전체' ? expr
+        : ['case', ['==', ['get', 'access_level'], mapLevelFilter], expr, FILTER_DIM];
+      // 입구 점은 처음엔 숨기고, 고른 건물(길찾기는 출발·도착 건물)의 입구만 보여 줌 (?pick 점검 모드는 모두)
+      function updateEntranceVis() {
+        if (!map.getLayer('entrance-dots')) return;
+        let flt = null;
+        if (!PICK) {
+          const ids = currentTab === 'route' ? ((navFocus && navFocus.buildings) || []) : (currentBld ? [currentBld] : []);
+          flt = ['in', ['get', 'building_id'], ['literal', ids]];
+        }
+        ['entrance-halo', 'entrance-dots', 'entrance-hit'].forEach(l => map.setFilter(l, flt));
+      }
       function setFocus(f) {
+        lastFocus = f;
+        updateEntranceVis();
         setRoutesDim(!!(f && f.dimRoutes));
         if (!f) {
-          map.setPaintProperty('buildings-3d', 'fill-extrusion-color', levelColor('access_level', false));
+          map.setPaintProperty('buildings-3d', 'fill-extrusion-color', withFilter(levelColor('access_level', false)));
           if (map.getLayer('entrance-dots')) {
             map.setPaintProperty('entrance-dots', 'circle-color', levelColor('access_level', false));
             map.setPaintProperty('entrance-dots', 'circle-stroke-opacity', 1);
@@ -4073,7 +4612,7 @@
           return;
         }
         const inB = ['in', ['get', 'building_id'], ['literal', f.buildings || []]];
-        map.setPaintProperty('buildings-3d', 'fill-extrusion-color', ['case', inB, levelColor('access_level', false), levelColor('access_level', true)]);
+        map.setPaintProperty('buildings-3d', 'fill-extrusion-color', withFilter(['case', inB, levelColor('access_level', false), levelColor('access_level', true)]));
         if (map.getLayer('entrance-dots')) {
           const inE = f.entrances && f.entrances.length ? ['in', ['get', 'facility_id'], ['literal', f.entrances]] : inB;
           map.setPaintProperty('entrance-dots', 'circle-color', ['case', inE, levelColor('access_level', false), levelColor('access_level', true)]);
@@ -4129,6 +4668,9 @@
       // 건물 이름표: 건물마다 HTML 이름표 하나를 지붕 위쪽에 띄움
       // (Set으로 중복 building_id를 지워서 조각이 여러 개인 건물도 이름은 한 번만)
       const ids = [...new Set(geo.features.map(f => f.properties.building_id))];
+      // 3D 캠퍼스 이름표가 시트의 건물 이름을 쓰도록 알려 줌 (detail-viewer.js가 받음)
+      window.tvBuildingNames = Object.fromEntries(ids.map(id => [id, (byId[id] && byId[id].name) || id]));
+      window.dispatchEvent(new Event('tv-names'));
       const tags = ids.map(id => {
         // geojson 속성에 label_lng·label_lat가 있으면 그 자리에 이름표를 둠
         // (도서관처럼 가운데가 뚫린 건물은 도형 가운데가 빈 마당이라 이름표가 허공에 뜨기 때문)
@@ -4426,6 +4968,7 @@
         if (currentBld) setFocus({ buildings: [currentBld], entrances: [] });
       };
 
+      let bMatches = () => true;   // 검색 구역에서 채움 (건물명 또는 그 건물의 시설·출입구가 검색어와 맞으면)
       // ==================== 목록 보기 ====================
       // 지도와 같은 데이터(geo의 건물, buildings 시트의 수준, facilities 시트의 입구·시설)로 만든 텍스트 목록
       // 시트에 없는 값은 지어내지 않고 '정보 없음' 또는 '현장 확인 필요'로 표시
@@ -4495,18 +5038,34 @@
         return h;
       }
 
+      // 목록 카드: 대표 사진(시트 photos에서 시설 없이 건물에만 단 사진, 없으면 건물 아이콘) + 건물 전체 수준 + 출입구 수 + 요약
+      // 출입구별 정보는 '상세 정보 보기'에서
+      const BLD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/><path d="M8 11h.01M12 11h.01M16 11h.01"/></svg>';
       function lvCardHtml(b) {
         const sid = safeId(b.id), sel = b.id === currentBld, open = lvState.open === b.id;
+        const ph = (photosByBld[b.id] || []).filter(p => p.file).sort((x, y) => (Number(x.step) || 0) - (Number(y.step) || 0))[0];
+        const okE = b.ents.filter(f => entLevel(f) === '원활').length, hardE = b.ents.filter(f => entLevel(f) === '어려움').length;
+        const has = t => b.others.some(f => f.type === t);
+        const sum = [
+          b.ents.length ? `휠체어 원활 출입구 ${okE}곳` : '',
+          hardE ? `어려움 출입구 ${hardE}곳` : '',
+          has('엘리베이터') ? '엘리베이터 있음' : '',
+          has('화장실') ? '장애인 화장실 있음' : ''
+        ].filter(Boolean).join(' · ');
         return `<li class="lv-card${sel ? ' is-selected' : ''}" data-bid="${esc(b.id)}">
           <article aria-labelledby="lvh-${sid}">
-            <div class="lv-card-head">
-              <h3 id="lvh-${sid}">${esc(b.name)}</h3>
-              ${lvChip(b.level)}
-              ${sel ? '<span class="lv-sel">지도에서 선택한 건물</span>' : ''}
+            <div class="lv-row">
+              <span class="lv-thumb">${BLD_SVG}${ph ? `<img src="${esc(photoSrc(ph.file))}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>
+              <div class="lv-main">
+                <div class="lv-card-head">
+                  <h3 id="lvh-${sid}">${esc(b.name)}</h3>
+                  <span class="lv-lvwrap"><span class="lvl-label">건물 전체</span>${lvChip(b.level)}</span>
+                  ${sel ? '<span class="lv-sel">지도에서 선택한 건물</span>' : ''}
+                </div>
+                <p class="lv-ent-count">주요 출입구 ${b.ents.length}개${b.ents.length ? '' : ' · 현장 확인 필요'}</p>
+                ${sum ? `<p class="lv-sum">${esc(sum)}</p>` : ''}
+              </div>
             </div>
-            <p class="lv-ent-count">주요 출입구 ${b.ents.length}개${b.ents.length ? '' : ' · 현장 확인 필요'}</p>
-            ${b.ents.length ? `<ul class="lv-ents" aria-label="${esc(b.name)} 입구별 수준">${b.ents.map(f =>
-              `<li>${lvDot(entLevel(f))}${esc(entName(f))} · ${entLevel(f)}</li>`).join('')}</ul>` : ''}
             <div class="lv-actions">
               <button type="button" class="lv-more" aria-expanded="${open}" aria-controls="lvd-${sid}">${open ? '상세 정보 접기' : '상세 정보 보기'}</button>
               <button type="button" class="lv-go" data-go="${esc(b.id)}" aria-label="${esc(b.name)} 지도에서 보기">지도에서 보기</button>
@@ -4536,11 +5095,11 @@
         const q = lvState.q.trim().replace(/\s+/g, '');
         const shown = lvBuildings.filter(b =>
           (lvState.level === '전체' || b.level === lvState.level) &&
-          (!q || b.name.replace(/\s+/g, '').includes(q)));
+          (!q || bMatches(b.id, lvState.q)));
         $('lv-list').innerHTML = shown.map(lvCardHtml).join('');
         $('lv-status').textContent = shown.length
           ? `${shown.length}곳을 보여 주고 있어요${lvState.level !== '전체' ? ` (${lvState.level})` : ''}.`
-          : '검색 결과가 없습니다.';
+          : '검색 결과가 없습니다. 다른 건물명이나 시설명을 입력해 주세요.';
         const park = lvParkingHtml();
         $('lv-parking').innerHTML = park;
         $('lv-parking').hidden = !park;
@@ -4584,6 +5143,195 @@
       });
       if (currentView === 'list') renderList(true);   // 불러오는 동안 목록 보기를 눌렀다면 바로 채움
       // ==================== 목록 보기 끝 ====================
+
+      // ==================== 검색·필터 (지도와 목록 공통) ====================
+      // 검색: 시트의 건물·시설(입구·주차·엘리베이터·화장실 등 실제 등록된 것만)을 이름·종류·위치 설명으로 찾음
+      // 필터: 접근성 수준(지도는 흐리게, 목록은 거름) + 주차·카페 아이콘 보이기/숨기기. 지도와 목록에 같이 적용
+      {
+        const msInput = $('ms-input'), msList = $('ms-results'), msClear = $('ms-clear'), msLive = $('ms-live');
+        const norm = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+        const TYPE_WORDS = { '입구': '입구 출입구 문', '주차': '주차 주차장 장애인주차', '화장실': '화장실 장애인화장실', '엘리베이터': '엘리베이터 승강기', '카페': '카페 커피' };
+        const facLabel = f => TYPE_TITLES[f.type] || f.type || '시설';
+        const bnm = id => (byId[id] && byId[id].name) || '';
+        // own: 시설 자체 설명(건물 이름 제외), hay: 건물 이름까지 포함
+        const facIndex = facilities.filter(f => f.type && f.facility_id).map(f => {
+          const own = norm([facLabel(f), TYPE_WORDS[f.type] || '', f.location_desc, f.floor, f.equipment].join(' '));
+          return { f, own, hay: norm(bnm(f.building_id)) + own };
+        });
+        const bldIndex = lvBuildings.map(b => ({ b, hay: norm(b.name) }));
+        const words = q => String(q || '').trim().split(/\s+/).map(norm).filter(Boolean);   // 띄어 쓴 낱말이 모두 들어 있으면 일치
+        const hit = (hay, ws) => ws.every(w => hay.includes(w));
+        bMatches = (id, q) => {
+          const ws = words(q);
+          if (!ws.length) return true;
+          const b = bldIndex.find(x => x.b.id === id);
+          return !!(b && hit(b.hay, ws)) || facIndex.some(x => x.f.building_id === id && hit(x.hay, ws));
+        };
+        const TYPE_RANK = t => (TYPE_ORDER.indexOf(t) + 1) || 99;
+        let items = [], active = -1;
+
+        function closeResults() {
+          msList.hidden = true;
+          msInput.setAttribute('aria-expanded', 'false');
+          msInput.removeAttribute('aria-activedescendant');
+          active = -1;
+        }
+        // 결과 구성
+        //  1) 건물: 검색어가 건물 이름에 들어 있는 건물 (정확히 일치 → 이름이 검색어로 시작 → 포함 순)
+        //     그 아래에 그 건물의 출입구 (검색어에 '화장실'처럼 건물 이름 밖의 말이 있으면 그 건물에서 그 말과 맞는 시설)
+        //  2) 다른 결과: 건물 이름이 아니라 시설 자체 설명이 검색어와 맞는 것 (다른 건물 소속은 '관련 결과'로 따로)
+        const optHtml = (it, i) => {
+          if (it.kind === 'b') {
+            return `<li id="ms-opt-${i}" class="ms-opt ms-bld" role="option" aria-selected="false" data-i="${i}">
+              <span class="ms-name"><b>${esc(it.b.name)}</b><small>건물 · 주요 출입구 ${it.b.ents.length}개</small></span>
+              <span class="ms-lvwrap"><small>건물 전체</small>${lvChip(it.b.level)}</span></li>`;
+          }
+          const f = it.f, isEnt = f.type === '입구';
+          const lv = LEVELS[f.access_level] ? f.access_level : '정보 없음';
+          const name = it.child ? (f.location_desc || facLabel(f)) : [bnm(f.building_id), f.location_desc || facLabel(f)].filter(Boolean).join(' ');
+          return `<li id="ms-opt-${i}" class="ms-opt${it.child ? ' ms-child' : ''}" role="option" aria-selected="false" data-i="${i}">
+            <span class="ms-name"><b>${esc(name)}</b><small>${esc([isEnt ? '출입구' : facLabel(f), f.floor].filter(Boolean).join(' · '))}</small></span>${isEnt ? lvChip(lv) : ''}</li>`;
+        };
+        const facSort = (a, c) => TYPE_RANK(a.f.type) - TYPE_RANK(c.f.type) || floorRank(a.f.floor) - floorRank(c.f.floor);
+        function showResults() {
+          const ws = words(msInput.value);
+          if (!ws.length || currentView === 'list') { closeResults(); return; }
+          const q0 = norm(msInput.value);
+          const rank = x => x.hay === q0 ? 0 : x.hay.startsWith(ws[0]) ? 1 : 2;
+          const blds = bldIndex.filter(x => ws.some(w => x.hay.includes(w)))
+            .sort((a, c) => rank(a) - rank(c) || a.b.name.localeCompare(c.b.name, 'ko')).slice(0, 4);
+          const bIds = new Set(blds.map(x => x.b.id));
+          items = [];
+          let html = '';
+          if (blds.length) html += '<li class="ms-group" role="presentation">건물</li>';
+          blds.forEach(x => {
+            const rest = ws.filter(w => !x.hay.includes(w));   // 건물 이름 밖의 말 (예: '도서관 화장실'의 '화장실')
+            html += optHtml({ kind: 'b', b: x.b }, items.length);
+            items.push({ kind: 'b', b: x.b });
+            facIndex.filter(y => y.f.building_id === x.b.id && (rest.length ? hit(y.own, rest) : y.f.type === '입구'))
+              .sort(facSort).slice(0, 6).forEach(y => {
+                const it = { kind: 'f', f: y.f, child: true };
+                html += optHtml(it, items.length);
+                items.push(it);
+              });
+          });
+          const others = facIndex.filter(y => !bIds.has(y.f.building_id) && hit(y.hay, ws)).sort(facSort).slice(0, 8);
+          const ents = others.filter(y => y.f.type === '입구'), rest = others.filter(y => y.f.type !== '입구');
+          const group = (label, list) => {
+            if (!list.length) return;
+            html += `<li class="ms-group" role="presentation">${label}</li>`;
+            list.forEach(y => { const it = { kind: 'f', f: y.f }; html += optHtml(it, items.length); items.push(it); });
+          };
+          if (blds.length) group('관련 결과 (다른 건물·시설)', others);
+          else { group('출입구', ents); group('시설', rest); }
+          if (!items.length) html = '<li class="ms-empty" role="presentation">검색 결과가 없습니다. 다른 건물명이나 시설명을 입력해 주세요.</li>';
+          msList.innerHTML = html;
+          msList.scrollTop = 0;
+          msList.hidden = false;
+          msInput.setAttribute('aria-expanded', 'true');
+          active = -1;
+          msLive.textContent = items.length ? `검색 결과 ${items.length}건` : '검색 결과가 없습니다.';
+        }
+        function setActive(i) {
+          const opts = msList.querySelectorAll('.ms-opt');
+          if (!opts.length) return;
+          active = (i + opts.length) % opts.length;
+          opts.forEach((o, k) => o.setAttribute('aria-selected', String(k === active)));
+          msInput.setAttribute('aria-activedescendant', opts[active].id);
+          opts[active].scrollIntoView({ block: 'nearest' });
+        }
+        // 고르면: 지도로 가서 그 건물(시설이면 그 시설을 맨 위에) 패널을 열고 강조
+        function pick(i) {
+          const it = items[i];
+          if (!it) return;
+          closeResults();
+          setView('map', { noFocus: true });
+          if (it.kind === 'b') { showBuilding(it.b.id); return; }
+          const f = it.f;
+          if (f.building_id && byId[f.building_id]) {
+            showBuilding(f.building_id, f.facility_id);
+            if (f.lng && f.lat) focusFacility(f.facility_id);   // 그 출입구·시설 좌표로 이동 + 마커 강조
+            return;
+          }
+          const mk = markerOf(f.facility_id);
+          if (mk) { mk.click(); return; }
+          if (f.lng && f.lat) map.easeTo({ center: [Number(f.lng), Number(f.lat)], zoom: Math.max(map.getZoom(), 18), duration: reduceMotion ? 0 : 700 });
+        }
+        msInput.addEventListener('input', () => {
+          msClear.hidden = !msInput.value;
+          lvState.q = msInput.value;
+          if (currentView === 'list') renderList(); else showResults();
+        });
+        msInput.addEventListener('focus', () => { if (msInput.value) showResults(); });
+        msInput.addEventListener('keydown', e => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); if (msList.hidden) showResults(); setActive(active + 1); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+          else if (e.key === 'Enter') { if (!msList.hidden && items.length) { e.preventDefault(); pick(active < 0 ? 0 : active); } }
+          else if (e.key === 'Escape') { if (!msList.hidden) { e.stopPropagation(); closeResults(); } }
+        });
+        msList.addEventListener('mousedown', e => e.preventDefault());   // 고르는 동안 검색창 포커스 유지
+        msList.addEventListener('click', e => { const o = e.target.closest('.ms-opt'); if (o) pick(Number(o.dataset.i)); });
+        msClear.addEventListener('click', () => {
+          msInput.value = '';
+          msClear.hidden = true;
+          lvState.q = '';
+          closeResults();
+          if (currentView === 'list') renderList();
+          msInput.focus();
+        });
+        document.addEventListener('click', e => { if (!e.target.closest('#mapsearch')) { closeResults(); closeFilter(); } });
+
+        // ---------- 필터 ----------
+        const pop = $('ms-filter-pop'), fbtn = $('ms-filter');
+        const F = { level: '전체', park: true, cafe: true };
+        const levelsHere = LV_ORDER.filter(lv => lvBuildings.some(b => b.level === lv));
+        const hasPark = facilities.some(f => f.type === '주차' && f.lng && f.lat);
+        const hasCafe = facilities.some(f => f.type === '카페' && f.lng && f.lat);
+        pop.innerHTML = `<h3 id="mf-lv-title">접근성 수준</h3>
+          <div role="radiogroup" aria-labelledby="mf-lv-title">${['전체', ...levelsHere].map(lv =>
+            `<label class="mf-opt"><input type="radio" name="mf-level" value="${lv}"${lv === '전체' ? ' checked' : ''}>${lv === '전체' ? '전체 건물' : lvDot(lv) + lv} <span class="mf-count">${lv === '전체' ? lvBuildings.length : lvBuildings.filter(b => b.level === lv).length}</span></label>`).join('')}</div>
+          ${hasPark || hasCafe ? `<div class="mf-sep"></div><h3>지도에 보일 아이콘</h3>
+            ${hasPark ? '<label class="mf-opt"><input type="checkbox" name="mf-park" checked><span class="legend-park" aria-hidden="true">P</span>장애인 주차구역</label>' : ''}
+            ${hasCafe ? '<label class="mf-opt"><input type="checkbox" name="mf-cafe" checked>카페·편의시설</label>' : ''}` : ''}
+          <button type="button" class="mf-reset">필터 초기화</button>`;
+        function applyFilter() {
+          lvState.level = F.level;
+          if (currentView === 'list') renderList();
+          mapLevelFilter = F.level;
+          setFocus(lastFocus);   // 지금 선택 강조는 그대로 두고 필터만 다시 적용
+          document.body.classList.toggle('hide-park', !F.park);
+          document.body.classList.toggle('hide-cafe', !F.cafe);
+          const on = F.level !== '전체' || !F.park || !F.cafe;
+          fbtn.querySelector('.ms-dot').hidden = !on;
+          fbtn.classList.toggle('active', on);
+          fbtn.setAttribute('aria-label', on ? `필터 (적용 중: ${F.level === '전체' ? '아이콘 숨김' : F.level})` : '필터');
+          msLive.textContent = F.level === '전체' ? '전체 건물을 보여 주고 있어요.' : `${F.level} 건물만 보여 주고 있어요.`;
+        }
+        pop.addEventListener('change', e => {
+          const el = e.target;
+          if (el.name === 'mf-level') F.level = el.value;
+          if (el.name === 'mf-park') F.park = el.checked;
+          if (el.name === 'mf-cafe') F.cafe = el.checked;
+          applyFilter();
+        });
+        pop.querySelector('.mf-reset').addEventListener('click', () => {
+          Object.assign(F, { level: '전체', park: true, cafe: true });
+          pop.querySelectorAll('input').forEach(i => { i.checked = i.type === 'checkbox' || i.value === '전체'; });
+          applyFilter();
+        });
+        function closeFilter() { pop.hidden = true; fbtn.setAttribute('aria-expanded', 'false'); }
+        fbtn.addEventListener('click', e => {
+          e.stopPropagation();
+          const open = pop.hidden;
+          closeResults();
+          pop.hidden = !open;
+          fbtn.setAttribute('aria-expanded', String(open));
+          if (open) (pop.querySelector('input:checked') || pop.querySelector('input')).focus();
+        });
+        pop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeFilter(); fbtn.focus(); } });
+        updateEntranceVis();
+      }
+      // ==================== 검색·필터 끝 ====================
 
       // ==================== 소식 탭 ====================
       // 시트 news 탭 전체를 최근 순으로. newsNewDays 안의 소식은 '새 소식' 표시

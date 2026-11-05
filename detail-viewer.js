@@ -75,6 +75,13 @@ const DEF = {
   eyeHeight: 1.6,       // 땅에서 눈높이(m): 카메라가 이보다 낮아지지 않음
   lookUpNear: 0.12,     // 모델 크기 대비 이 거리 안으로 다가가면 올려다보기 가능
   lookUpMax: 0.82,      // 가장 많이 돌렸을 때 각도 (0.5π = 수평, 0.82π ≈ 위로 58°)
+  // 건물 이름표: Blender 물체 이름이 building_id(예: main_admin)이거나 그걸로 시작하는 건물 위에 띄움
+  //  - 이름은 접근성 지도와 같은 시트 이름 (지도가 아직 안 불러왔으면 data/buildings.geojson의 name)
+  //  - labelAlias: building_id와 물체 이름이 다른 건물 { building_id: ['물체 이름', …] } (예: 손으로 만든 학생회관 'Cube')
+  //  - 이름표가 안 뜨는 건물은 F12 Console에 목록이 나옴 → 물체 이름을 labelAlias에 적기
+  labels: true,
+  labelAlias: { student_hall: ['Cube', 'Cube.001'] },
+  labelLift: 3,         // 지붕에서 이만큼(m) 위
   // 처음 시점 (자동 계산)
   //  - azimuth: 바라보는 방향(°, 지도 bearing과 같은 뜻), polar: 수직에서 기운 각도(45 = 수평에서 45° 내려다봄)
   //  - fillW·fillH: 캠퍼스가 화면 가로·세로를 채우는 비율 (둘 중 먼저 닿는 쪽에 맞춤)
@@ -117,6 +124,13 @@ css.textContent = `
   #detail-view .dv-ctrls button { width: 36px; height: 36px; display: grid; place-items: center; color: var(--ink); }
   #detail-view .dv-ctrls svg { width: 20px; height: 20px; }
   #detail-view .detail-reset { display: none !important; }
+  #detail-view .dv-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+  #detail-view .dv-label {
+    position: absolute; left: 0; top: 0; padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+    background: rgba(29, 38, 34, .58); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    color: #fff; font-size: 12px; font-weight: 600; will-change: transform;
+  }
+  @media (max-width: 700px) { #detail-view .dv-label { font-size: 11px; padding: 2px 6px; } }
   @media (max-width: 700px) {
     #detail-view .detail-cap { left: 8px; bottom: 16px; padding: 8px 14px; border-radius: 18px; font-size: 11.5px; line-height: 1.45; max-width: calc(100% - 68px); }
     #detail-view .detail-cap b { font-size: 12.5px; }
@@ -127,7 +141,7 @@ document.head.appendChild(css);
 
 function buildUI() {
   const cap = root.querySelector('.detail-cap');
-  if (cap) cap.innerHTML = `<b>상세 캠퍼스</b><span>건물 외형 참고용 3D 모델이에요. 접근성 정보는 '접근성 지도' 탭에서 확인해 주세요.</span>
+  if (cap) cap.innerHTML = `<b>3D 캠퍼스</b><span>건물 외형 참고용 3D 모델이에요. 접근성 정보는 '접근성 지도' 탭에서 확인해 주세요.</span>
     <span class="meta">${isMobile() ? '한 손가락으로 옮기기, 두 손가락으로 확대·돌리기' : '끌어서 옮기기, 오른쪽 버튼으로 돌리기, 휠로 확대'}</span>`;
   const I = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const btn = (act, label, icon) => `<button type="button" data-act="${act}" title="${label}" aria-label="${label}">${icon}</button>`;
@@ -687,6 +701,80 @@ function lookUpRules() {
   }
 }
 
+// ---------- 건물 이름표 ----------
+// 지붕 위 한 점을 매 프레임 화면 좌표로 바꿔 HTML 이름표를 그 자리에 둠 (접근성 지도의 이름표와 같은 모양)
+let labels = [], labelBox = null;
+async function buildingNames() {
+  if (window.tvBuildingNames) return window.tvBuildingNames;
+  try {
+    const geo = await (await fetch((typeof CONFIG !== 'undefined' && CONFIG.geojson) || 'data/buildings.geojson')).json();
+    const out = {};
+    geo.features.forEach(f => { const p = f.properties || {}; if (p.building_id && !out[p.building_id]) out[p.building_id] = p.name || p.building_id; });
+    return out;
+  } catch (e) { return {}; }
+}
+async function buildLabels(model) {
+  const names = await buildingNames();
+  const ids = Object.keys(names);
+  if (!ids.length) return;
+  const alias = {};
+  Object.entries(C.labelAlias || {}).forEach(([id, list]) => list.forEach(n => { alias[n.toLowerCase()] = id; }));
+  const idsLong = ids.slice().sort((a, b) => b.length - a.length);
+  // 이름을 . _ - 공백으로 나눈 낱말(끝 숫자는 뗌)로 비교: arts, arts.001, arts_2, Facade_arts_wall → arts / parts·artshall은 아님
+  const toks = s => String(s).toLowerCase().split(/[._\-\s]+/).map(w => w.replace(/\d+$/, '')).filter(Boolean);
+  const idToks = Object.fromEntries(ids.map(id => [id, toks(id)]));
+  const keyOf = name => {
+    const n = String(name || '').toLowerCase();
+    if (!n) return null;
+    if (alias[n]) return alias[n];
+    // building_id가 이름 안에 '단어'로 들어 있으면 그 건물 (예: arts, arts.001, arts_2, Facade_arts_wall)
+    // 긴 id부터 맞춰 봐서 비슷한 id(arts / arts_annex)가 섞이지 않게
+    const nt = toks(n);
+    return idsLong.find(id => { const it = idToks[id]; return nt.some((_, s) => it.every((w, k) => nt[s + k] === w)); }) || null;
+  };
+  const boxes = {}, parts = {};
+  model.traverse(o => {
+    if (!o.isMesh || !o.visible || o.userData.tree || o.userData.flat) return;
+    let id = null, by = '';
+    for (let p = o; p && !id; p = p.parent) { id = keyOf(p.name); by = p.name; }
+    if (!id) return;
+    (boxes[id] ||= new THREE.Box3()).expandByObject(o);
+    (parts[id] ||= new Set()).add(by);
+  });
+  // 건물마다 어떤 물체를 묶었는지 (이름표 위치가 이상하면 여기서 빠진 조각을 확인)
+  console.log('[3D 캠퍼스] 건물별로 묶은 물체:', Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, [...v].join(', ')])));
+  labelBox = document.createElement('div');
+  labelBox.className = 'dv-labels';
+  labelBox.setAttribute('aria-hidden', 'true');
+  stage.appendChild(labelBox);
+  labels = Object.entries(boxes).map(([id, b]) => {
+    const el = document.createElement('div');
+    el.className = 'dv-label';
+    el.textContent = names[id];
+    labelBox.appendChild(el);
+    const c = b.getCenter(new THREE.Vector3());
+    return { id, el, pos: new THREE.Vector3(c.x, b.max.y + C.labelLift, c.z) };
+  });
+  const missing = ids.filter(id => !boxes[id]);
+  console.log(`[3D 캠퍼스] 이름표 ${labels.length}개` + (missing.length ? ` · 3D 모델에서 못 찾은 건물: ${missing.join(', ')} (labelAlias에 물체 이름을 적어 주세요)` : ''));
+  // 지도 쪽에서 시트 이름을 나중에 받으면 글자만 바꿈
+  window.addEventListener('tv-names', () => labels.forEach(l => { if (window.tvBuildingNames[l.id]) l.el.textContent = window.tvBuildingNames[l.id]; }));
+}
+const lv = new THREE.Vector3();
+function updateLabels() {
+  if (!labels.length) return;
+  const w = stage.clientWidth, h = stage.clientHeight;
+  for (const l of labels) {
+    lv.copy(l.pos).applyMatrix4(camera.matrixWorldInverse);
+    if (lv.z > -camera.near) { l.el.style.display = 'none'; continue; }   // 카메라 뒤
+    lv.copy(l.pos).project(camera);
+    const x = (lv.x + 1) / 2 * w, y = (1 - lv.y) / 2 * h;
+    if (x < -100 || x > w + 100 || y < -40 || y > h + 40) { l.el.style.display = 'none'; continue; }
+    l.el.style.display = '';
+    l.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
+  }
+}
+
 function resize() {
   if (!renderer) return;
   const w = stage.clientWidth, h = stage.clientHeight;
@@ -711,6 +799,7 @@ function frame(now) {
     scene.fog.far = dist + radius * 5.5;
   }
   (effect || renderer).render(scene, camera);
+  updateLabels();
 }
 
 function setRunning(on) {
@@ -832,6 +921,7 @@ function start() {
       try { bakeGroundAO(model, box); } catch (err) { console.warn('[상세 캠퍼스] 접촉 그림자 계산 실패, 없이 진행:', err); }
     }
     collectFitPoints(model);
+    if (C.labels) buildLabels(model);
     // 모델의 큰 네모 바닥판은 같은 색 둥근 땅이 대신함 (네모 테두리가 지평선에 딱 끊겨 보이던 문제)
     model.traverse(o => { if (o.userData.base) o.visible = false; });
     addFarGround(box, baseMat);
