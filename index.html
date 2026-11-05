@@ -2763,6 +2763,17 @@
       font-size: 24px;
     }
 
+    .nv-policy {
+      margin: 10px 0 0;
+      padding: 10px 12px;
+      border-left: 3px solid #991e66;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
     #news-view h2:focus-visible {
       outline: 3px solid var(--focus);
       outline-offset: 4px;
@@ -3896,6 +3907,8 @@
       <header>
         <h2 id="news-title" tabindex="-1">변경 소식</h2>
         <p class="meta">캠퍼스 접근성 시설이 바뀐 내용을 최근 순으로 모았어요.</p>
+        <!-- 갱신 방식 안내: 사진·상세 설명이 바로 바뀌지 않는 이유를 미리 밝힘 -->
+        <p class="nv-policy">출입구 정보와 변경 소식은 수시로, 사진과 상세 설명은 연 1회 정기 점검 때 반영됩니다. 지도·사진과 다른 점이 있다면 이곳의 최신 변경 소식을 먼저 확인해 주세요.</p>
       </header>
       <p id="nv-status" class="lv-status" role="status" aria-live="polite">소식을 불러오는 중이에요…</p>
       <ul id="nv-list" class="lv-list"></ul>
