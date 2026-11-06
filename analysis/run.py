@@ -11,8 +11,10 @@ BASE={k:1 for k in LEVELS}
 EC={'원활':0,'일부 제약':30,'정보 없음':30}
 cur_routes={k:v['condition'] for k,v in routes_csv.items()}
 r2023=dict(cur_routes); r2023.update({'R01':'일부 제약','R06':'일부 제약'})
-o2023={'E08':'어려움','E37':'어려움','E11':'어려움','E12':'어려움','E09':'어려움','E10':'어려움','E06':'일부 제약','E01':'일부 제약'}
-o2023c={k:v for k,v in o2023.items() if k not in ('E09','E10')}   # 보수적: 대강의동 제외
+o2023={'E08':'일부 제약','E37':'어려움','E11':'어려움','E12':'어려움','E06':'일부 제약','E01':'일부 제약'}
+# 2023 맵: 학생회관 '도서관 방면 입구 평평하여 진입 가능'(E08, 자동문 설치 전) / '정문·후문 계단'(E16·E37)
+#          도서관 '경사로 있으나 막혀 있어 실사용 불편'(E11·E12) / 대강의동 '입구 양옆 경사로'(현재와 같음)
+o2023c=o2023   # (이전 버전의 보수적 시나리오는 2023 맵 원본 확인 후 본 시나리오와 같아져 통합)
 net_cur=Net(cur_routes); net23=Net(r2023)
 print('nodes',len(net_cur.nodes),'edges',len(net_cur.edges),'excluded',sorted(excluded))
 ids=[b['building_id'] for b in bld]; name={b['building_id']:b['name'] for b in bld}
